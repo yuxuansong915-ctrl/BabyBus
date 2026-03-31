@@ -1,66 +1,91 @@
-import React, { useState, useEffect } from 'react';
-// 提前引入我们即将创建的四大组件
-// ⚠️ 预警：现在保存后浏览器肯定会报错，因为我们还没建这四个文件，这是正常的！
-import AddAssetForm from './components/AddAssetForm';
-import PortfolioTable from './components/PortfolioTable';
-import AssetChart from './components/AssetChart';
-import LedgerModal from './components/LedgerModal';
-import './App.css';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Briefcase, LineChart, History, Settings as SettingsIcon } from 'lucide-react';
 
-function App() {
-  // --- 全局状态管理 (State) ---
-  const [portfolio, setPortfolio] = useState([]); // 存放当前的持仓数据
-  const [isLedgerOpen, setIsLedgerOpen] = useState(false); // 控制“流水账弹窗”的开关
+// ==========================================
+// 临时占位页面 (之后我们会逐个替换它们)
+// ==========================================
+const Dashboard = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📊 Dashboard 首页 (建设中...)</div>;
+const Holdings = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>💼 我的持仓记录 (建设中...)</div>;
+const Market = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>🌍 发现与行情筛选 (建设中...)</div>;
+const Transactions = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📜 行为金融学交易日志 (建设中...)</div>;
+const Settings = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>⚙️ 风险控制与设置 (建设中...)</div>;
 
-  // --- 核心数据拉取引擎 (连接后端) ---
-  const fetchPortfolio = () => {
-    fetch('http://localhost:8080/api/portfolio')
-      .then(res => res.json())
-      .then(data => {
-        console.log("成功拿到后端超级数据包:", data);
-        setPortfolio(data); // 把后端的数据存入主板内存
-      })
-      .catch(err => console.error("获取数据失败，请检查后端是否启动:", err));
-  };
+// ==========================================
+// 专业级顶部导航栏组件
+// ==========================================
+const Navbar = () => {
+  const location = useLocation(); // 获取当前所在的路由路径
 
-  // 页面初次加载时，自动拉取一次数据
-  useEffect(() => {
-    fetchPortfolio();
-  }, []);
+  // 导航栏按钮数据配置
+  const navItems = [
+    { path: '/', name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { path: '/holdings', name: 'Holdings', icon: <Briefcase size={20} /> },
+    { path: '/market', name: 'Market', icon: <LineChart size={20} /> },
+    { path: '/transactions', name: 'Transactions', icon: <History size={20} /> },
+    { path: '/settings', name: 'Settings', icon: <SettingsIcon size={20} /> } // <-- 这里改成了 SettingsIcon
+  ];
 
-  // --- 全局 UI 布局拼装 ---
   return (
-    <div style={{ padding: '30px', fontFamily: 'Arial, sans-serif', maxWidth: '1200px', margin: '0 auto', backgroundColor: '#f4f7f6', minHeight: '100vh' }}>
-      
-      {/* 头部：标题与流水账按钮 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-        <h1 style={{ color: '#2c3e50', margin: 0 }}>📈 投资组合专业控制台</h1>
-        <button 
-          onClick={() => setIsLedgerOpen(true)}
-          style={{ padding: '10px 20px', backgroundColor: '#34495e', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}
-        >
-          📜 查看交易流水
-        </button>
+    <nav style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0 40px', display: 'flex', alignItems: 'center', height: '70px', position: 'sticky', top: 0, zIndex: 1000, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+      {/* Logo 区 */}
+      <div style={{ display: 'flex', alignItems: 'center', marginRight: '60px' }}>
+        <div style={{ width: '32px', height: '32px', backgroundColor: '#2563eb', borderRadius: '8px', marginRight: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' }}>P</div>
+        <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1e293b', margin: 0, letterSpacing: '-0.5px' }}>PortfolioPro</h1>
       </div>
 
-      {/* 上半部分：交易台与资产饼图 */}
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
-        {/* 将刷新函数传给表单，买入成功后它能通知主板重新拉数据 */}
-        <AddAssetForm refreshData={fetchPortfolio} />
+      {/* 导航链接区 */}
+      <div style={{ display: 'flex', gap: '10px', height: '100%' }}>
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link 
+              key={item.path} 
+              to={item.path} 
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '0 20px', textDecoration: 'none', fontWeight: '600', fontSize: '15px', transition: 'all 0.2s', height: '100%',
+                color: isActive ? '#2563eb' : '#64748b',
+                borderBottom: isActive ? '3px solid #2563eb' : '3px solid transparent'
+              }}
+            >
+              {item.icon}
+              {item.name}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* 右侧用户头像区 */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <span style={{ fontWeight: '500', color: '#475569', fontSize: '14px' }}>Hi, 投资人</span>
+        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e2e8f0', backgroundImage: 'url("https://api.dicebear.com/7.x/avataaars/svg?seed=Felix")', backgroundSize: 'cover' }}></div>
+      </div>
+    </nav>
+  );
+};
+
+// ==========================================
+// 主应用路由外壳
+// ==========================================
+function App() {
+  return (
+    <Router>
+      <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+        {/* 全局导航栏 */}
+        <Navbar />
         
-        {/* 将持仓数据传给图表去渲染 */}
-        <AssetChart data={portfolio} />
+        {/* 页面内容渲染区 */}
+        <main style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px 20px' }}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/holdings" element={<Holdings />} />
+            <Route path="/market" element={<Market />} />
+            <Route path="/transactions" element={<Transactions />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
       </div>
-
-      {/* 下半部分：带折线图的持仓明细表 */}
-      <PortfolioTable data={portfolio} refreshData={fetchPortfolio} />
-
-      {/* 隐藏的弹窗：流水账 (只有 isLedgerOpen 为 true 时才渲染并显示) */}
-      {isLedgerOpen && (
-        <LedgerModal onClose={() => setIsLedgerOpen(false)} />
-      )}
-
-    </div>
+    </Router>
   );
 }
 
