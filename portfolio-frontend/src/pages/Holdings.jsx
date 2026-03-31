@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import { TrendingUp, TrendingDown, Info, PieChart, Activity, Briefcase } from 'lucide-react';
+import AddRecordModal from '../components/AddRecordModal';
 
 // --- 内部小组件：迷你走势图 ---
 const Sparkline = ({ data }) => {
@@ -25,6 +26,7 @@ const Holdings = () => {
   const [portfolio, setPortfolio] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAsset, setSelectedAsset] = useState(null); // 右侧面板当前选中的资产
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // 拉取后端超级数据包
   const fetchData = () => {
@@ -70,9 +72,12 @@ const Holdings = () => {
             <Briefcase size={24} color="#3b82f6" /> 我的核心持仓
           </h2>
           {/* 触发弹窗的按钮 (弹窗组件我们下一步写) */}
-          <button style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => alert("即将开发：行为金融学记录弹窗！")}>
-            ➕ 记录新交易
-          </button>
+        <button 
+        style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} 
+        onClick={() => setIsModalOpen(true)}
+        >
+        ➕ 记录新交易
+        </button>
         </div>
 
         <div style={{ overflowY: 'auto', flex: '1' }}>
@@ -183,6 +188,16 @@ const Holdings = () => {
           </div>
         )}
       </div>
+
+      {/* ========================================== */}
+      {/* 隐藏的弹窗组件 */}
+      {/* ========================================== */}
+      <AddRecordModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        onSuccess={fetchData} // 记录成功后，调用 fetchData 刷新表格！
+      />
+
     </div>
   );
 };
