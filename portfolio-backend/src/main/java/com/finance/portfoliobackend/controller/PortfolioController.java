@@ -1,22 +1,20 @@
 package com.finance.portfoliobackend.controller;
 
+import com.finance.portfoliobackend.dto.AddRecordRequest;
 import com.finance.portfoliobackend.dto.PortfolioItemDTO;
 import com.finance.portfoliobackend.model.PortfolioItem;
-import com.finance.portfoliobackend.model.PortfolioHistory;
 import com.finance.portfoliobackend.model.TransactionRecord;
 import com.finance.portfoliobackend.repository.PortfolioItemRepository;
-import com.finance.portfoliobackend.repository.PortfolioHistoryRepository;
 import com.finance.portfoliobackend.repository.TransactionRecordRepository;
 import com.finance.portfoliobackend.service.FinanceDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/portfolio")
@@ -25,10 +23,11 @@ public class PortfolioController {
 
     @Autowired private PortfolioItemRepository repository;
     @Autowired private TransactionRecordRepository transactionRepo;
-    @Autowired private PortfolioHistoryRepository historyRepo;
     @Autowired private FinanceDataService financeService;
 
-    // --- 1. 获取当前持仓 (包含折线图数据) ---
+    // ==========================================
+    // 1. 获取全盘数据 (Dashboard & Holdings 页面使用)
+    // ==========================================
     @GetMapping
     public List<PortfolioItemDTO> getAllItems() {
         List<PortfolioItem> items = repository.findAll();
@@ -38,103 +37,118 @@ public class PortfolioController {
             PortfolioItemDTO dto = new PortfolioItemDTO();
             dto.setId(item.getId());
             dto.setTicker(item.getTicker());
+            dto.setAssetType(item.getAssetType());
             dto.setShares(item.getShares());
 
-            // 获取整个价格数组 (走缓存)
+            // 1. 拉取价格走势
             List<Double> priceHistory = financeService.getPriceHistory(item.getTicker());
-
             if (priceHistory != null && !priceHistory.isEmpty()) {
                 Double latestPrice = priceHistory.get(priceHistory.size() - 1);
                 dto.setCurrentPrice(latestPrice);
                 dto.setTotalValue(latestPrice * item.getShares());
-                dto.setPriceTrend(priceHistory); // 塞入走势数据供前端画图
+                dto.setPriceTrend(priceHistory);
             } else {
                 dto.setCurrentPrice(0.0);
                 dto.setTotalValue(0.0);
             }
+
+            // 2. 🚀 V2.0 核心：拉取多态基本面数据 (市盈率、费率等)
+            financeService.populateFundamentals(item.getTicker(), item.getAssetType(), dto);
+
             resultList.add(dto);
         }
         return resultList;
     }
 
-    // --- 2. 获取交易流水账 (对应优化 4) ---
+    // ==========================================
+    // 2. 获取交易流水 (Transactions 页面使用)
+    // ==========================================
     @GetMapping("/ledger")
     public List<TransactionRecord> getLedger() {
         return transactionRepo.findAll();
     }
 
-    // --- 3. 获取历史总资产走势 (对应优化 2) ---
-    @GetMapping("/history")
-    public List<PortfolioHistory> getHistory() {
-        return historyRepo.findAll();
-    }
+    // ==========================================
+    // 3. 🚀 V2.0 核心：添加记录 / 加仓 (Add)
+    // ==========================================
+    @PostMapping("/add")
+    public ResponseEntity<?> addRecord(@RequestBody AddRecordRequest request) {
+        // --- A. 智能处理“可选字段” (价格与数量计算) ---
+        Double finalPrice = request.getPrice();
 
-    // --- 4. 买入资产 (带容错校验 & 记流水 & 清缓存) ---
-    @PostMapping
-    public ResponseEntity<?> addPortfolioItem(@RequestBody PortfolioItem item) {
-        // 校验 1: 验证 AWS 是否能查到这只股票 (对应优化 1)
-        List<Double> prices = financeService.getPriceHistory(item.getTicker());
-        if (prices == null || prices.isEmpty()) {
-            return ResponseEntity.badRequest().body("校验失败：股票代码 " + item.getTicker() + " 不存在！");
+        // 如果用户没填价格，去 EODHD 查最新价作为默认买入价
+        if (finalPrice == null || finalPrice <= 0) {
+            List<Double> prices = financeService.getPriceHistory(request.getTicker());
+            if (prices == null || prices.isEmpty()) {
+                return ResponseEntity.badRequest().body("无法获取股票最新价格，请手动填写买入价！");
+            }
+            finalPrice = prices.get(prices.size() - 1);
         }
 
-        // 保存持仓
-        PortfolioItem savedItem = repository.save(item);
+        // 计算最终股数：如果填了总资金没填股数，则 股数 = 总资金 / 单价
+        Integer finalShares = request.getShares();
+        if ((finalShares == null || finalShares <= 0) && request.getTotalCost() != null) {
+            finalShares = (int) Math.floor(request.getTotalCost() / finalPrice);
+        }
+        if (finalShares == null || finalShares <= 0) {
+            return ResponseEntity.badRequest().body("买入股数或总资金必须至少填写一项！");
+        }
 
-        // 记流水账 (对应优化 4)
-        Double currentPrice = prices.get(prices.size() - 1);
+        // --- B. 更新或新增持仓表 ---
+        // 查找是否已经持有该资产，有则累加，无则新建
+        List<PortfolioItem> existingItems = repository.findAll();
+        PortfolioItem itemToSave = existingItems.stream()
+                .filter(item -> item.getTicker().equalsIgnoreCase(request.getTicker()))
+                .findFirst()
+                .orElse(new PortfolioItem());
+
+        itemToSave.setTicker(request.getTicker().toUpperCase());
+        itemToSave.setAssetType(request.getAssetType() != null ? request.getAssetType().toUpperCase() : "STOCK");
+        itemToSave.setShares((itemToSave.getShares() == null ? 0 : itemToSave.getShares()) + finalShares);
+        repository.save(itemToSave);
+
+        // --- C. 记录专业的行为金融学流水 ---
         TransactionRecord tx = new TransactionRecord();
-        tx.setTicker(item.getTicker());
-        tx.setActionType("BUY");
-        tx.setShares(item.getShares());
-        tx.setPrice(currentPrice);
-        tx.setTimestamp(LocalDateTime.now());
+        tx.setTicker(request.getTicker().toUpperCase());
+        tx.setActionType("ADD");
+        tx.setShares(finalShares);
+        tx.setPrice(finalPrice);
+        tx.setCurrency(request.getCurrency() != null ? request.getCurrency() : "USD");
+        tx.setEmotion(request.getEmotion() != null ? request.getEmotion() : "未分类");
+        tx.setTimestamp(request.getDate() != null ? request.getDate().atStartOfDay() : LocalDateTime.now());
         transactionRepo.save(tx);
 
-        // 手动操作，清空价格缓存 (对应优化 6)
-        financeService.flushCache();
-
-        return ResponseEntity.ok(savedItem);
+        financeService.flushCache(); // 清空缓存保证数据最新
+        return ResponseEntity.ok(itemToSave);
     }
 
-    // --- 5. 卖出资产 (记流水 & 清缓存) ---
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deletePortfolioItem(@PathVariable Long id) {
-        PortfolioItem item = repository.findById(id).orElse(null);
-        if (item != null) {
-            // 获取最新价格用于记账
-            List<Double> prices = financeService.getPriceHistory(item.getTicker());
-            Double currentPrice = (prices != null && !prices.isEmpty()) ? prices.get(prices.size() - 1) : 0.0;
+    // ==========================================
+    // 4. 移除记录 / 减仓 (Remove)
+    // ==========================================
+    @DeleteMapping("/remove/{id}")
+    public ResponseEntity<?> removeRecord(@PathVariable Long id) {
+        Optional<PortfolioItem> itemOpt = repository.findById(id);
+        if (itemOpt.isPresent()) {
+            PortfolioItem item = itemOpt.get();
 
-            // 记流水账
+            // 简单逻辑：这里一键清仓。如果是部分减仓，可以参考 Add 接口写一个复杂的 Remove 接口
             TransactionRecord tx = new TransactionRecord();
             tx.setTicker(item.getTicker());
-            tx.setActionType("SELL");
+            tx.setActionType("REMOVE");
             tx.setShares(item.getShares());
-            tx.setPrice(currentPrice);
+
+            List<Double> prices = financeService.getPriceHistory(item.getTicker());
+            tx.setPrice((prices != null && !prices.isEmpty()) ? prices.get(prices.size() - 1) : 0.0);
+
+            tx.setCurrency("USD");
+            tx.setEmotion("清仓退出");
             tx.setTimestamp(LocalDateTime.now());
             transactionRepo.save(tx);
 
             repository.deleteById(id);
-            financeService.flushCache(); // 清缓存
+            financeService.flushCache();
             return ResponseEntity.ok().build();
         }
         return ResponseEntity.notFound().build();
-    }
-
-    // --- 6. 每日定时记录总资产快照 (对应优化 2) ---
-    // 为了方便答辩演示，这里设置为每 5 分钟 (300000毫秒) 自动记录一次。真实情况可用 @Scheduled(cron = "0 0 17 * * ?")
-    @Scheduled(fixedRate = 300000)
-    public void recordTotalValueSnapshot() {
-        List<PortfolioItemDTO> currentPortfolio = this.getAllItems();
-        double totalSum = currentPortfolio.stream().mapToDouble(dto -> dto.getTotalValue() != null ? dto.getTotalValue() : 0.0).sum();
-
-        if (totalSum > 0) {
-            PortfolioHistory history = new PortfolioHistory();
-            history.setRecordDate(LocalDate.now()); // 如果是按分钟存，可以改存 LocalDateTime
-            history.setTotalValue(totalSum);
-            historyRepo.save(history);
-            System.out.println("🕒 定时任务执行：已记录当前总资产 " + totalSum);
-        }
     }
 }

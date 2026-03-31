@@ -1,20 +1,26 @@
 package com.finance.portfoliobackend.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
-@Data // Lombok 注解，自动生成 Getter, Setter, toString 等
-@Entity // 告诉 Spring JPA 这是一个数据库实体
-@Table(name = "portfolio_item") // 对应数据库中的表名
+@Entity
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class PortfolioItem {
-
-    @Id // 标明主键
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // 自增策略
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 10)
-    private String ticker;
+    private String ticker;      // 资产代码 (如 AAPL, SPY)
 
-    @Column(nullable = false)
-    private Integer shares;
+    // 👇 新增：资产类型标识 (例如: "STOCK" 代表股票, "ETF" 代表基金, "CRYPTO" 代表加密货币)
+    private String assetType;
+
+    private Integer shares;     // 持有数量
 }
