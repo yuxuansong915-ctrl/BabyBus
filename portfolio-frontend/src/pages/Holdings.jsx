@@ -1,0 +1,190 @@
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
+import { TrendingUp, TrendingDown, Info, PieChart, Activity, Briefcase } from 'lucide-react';
+
+// --- 内部小组件：迷你走势图 ---
+const Sparkline = ({ data }) => {
+  if (!data || data.length === 0) return <span style={{color: '#94a3b8', fontSize: '12px'}}>暂无数据</span>;
+  const chartData = data.map((price, i) => ({ index: i, price }));
+  const isUp = data[data.length - 1] >= data[0];
+  const color = isUp ? '#10b981' : '#ef4444'; // 涨绿跌红
+
+  return (
+    <div style={{ width: '100px', height: '40px' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData}>
+          <YAxis domain={['auto', 'auto']} hide />
+          <Line type="monotone" dataKey="price" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+const Holdings = () => {
+  const [portfolio, setPortfolio] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedAsset, setSelectedAsset] = useState(null); // 右侧面板当前选中的资产
+
+  // 拉取后端超级数据包
+  const fetchData = () => {
+    setIsLoading(true);
+    fetch('http://localhost:8080/api/portfolio')
+      .then(res => res.json())
+      .then(data => {
+        setPortfolio(data);
+        setIsLoading(false);
+        // 如果有数据且右侧没有选中项，默认选中第一个
+        if (data.length > 0 && !selectedAsset) {
+          setSelectedAsset(data[0]);
+        }
+      })
+      .catch(err => {
+        console.error('获取持仓失败:', err);
+        setIsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // 将长数字格式化为带 B/M 的简写 (如 3.2T, 500B)
+  const formatMarketCap = (num) => {
+    if (!num) return 'N/A';
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    return num;
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: '30px', height: 'calc(100vh - 150px)' }}>
+      
+      {/* ========================================== */}
+      {/* 左侧：持仓大表格 (占宽 2/3) */}
+      {/* ========================================== */}
+      <div style={{ flex: '2', backgroundColor: 'white', borderRadius: '12px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Briefcase size={24} color="#3b82f6" /> 我的核心持仓
+          </h2>
+          {/* 触发弹窗的按钮 (弹窗组件我们下一步写) */}
+          <button style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => alert("即将开发：行为金融学记录弹窗！")}>
+            ➕ 记录新交易
+          </button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: '1' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 1 }}>
+              <tr style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', fontSize: '14px' }}>
+                <th style={{ padding: '16px 8px' }}>资产代码</th>
+                <th style={{ padding: '16px 8px' }}>持仓数量</th>
+                <th style={{ padding: '16px 8px' }}>当前市价</th>
+                <th style={{ padding: '16px 8px' }}>30日走势</th>
+                <th style={{ padding: '16px 8px' }}>总价值</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
+                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>正在同步华尔街实时数据...</td></tr>
+              ) : portfolio.map(item => (
+                <tr 
+                  key={item.id} 
+                  onClick={() => setSelectedAsset(item)} // 点击行，将数据传给右侧面板
+                  style={{ 
+                    borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'all 0.2s',
+                    backgroundColor: selectedAsset?.id === item.id ? '#eff6ff' : 'transparent' // 选中行高亮
+                  }}
+                >
+                  <td style={{ padding: '16px 8px' }}>
+                    <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '16px' }}>{item.ticker}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'inline-block', padding: '2px 6px', backgroundColor: '#e2e8f0', borderRadius: '4px' }}>{item.assetType}</div>
+                  </td>
+                  <td style={{ padding: '16px 8px', fontWeight: '500' }}>{item.shares}</td>
+                  <td style={{ padding: '16px 8px', fontWeight: '500' }}>${item.currentPrice?.toFixed(2)}</td>
+                  <td style={{ padding: '16px 8px' }}><Sparkline data={item.priceTrend} /></td>
+                  <td style={{ padding: '16px 8px', fontWeight: 'bold', color: '#0f172a' }}>${item.totalValue?.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ========================================== */}
+      {/* 右侧：多态资产详情面板 (占宽 1/3) */}
+      {/* ========================================== */}
+      <div style={{ flex: '1', backgroundColor: 'white', borderRadius: '12px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', overflowY: 'auto' }}>
+        <h2 style={{ margin: 0, color: '#0f172a', fontSize: '18px', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity size={20} color="#8b5cf6" /> 深度分析 (Deep Dive)
+        </h2>
+
+        {!selectedAsset ? (
+          <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '50px' }}>
+            <Info size={40} style={{ marginBottom: '10px', opacity: 0.5 }} />
+            <p>请在左侧表格点击资产<br/>查看基本面数据</p>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+              <h3 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>{selectedAsset.ticker}</h3>
+              <span style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
+                {selectedAsset.assetType === 'ETF' ? '基金 / ETF' : '股票 / STOCK'}
+              </span>
+            </div>
+
+            {/* 核心亮点：多态渲染逻辑！ */}
+            {selectedAsset.assetType === 'ETF' ? (
+              /* --- ETF 专属视图 --- */
+              <div>
+                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b' }}>管理费率 (Expense Ratio)</span>
+                  <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{selectedAsset.expenseRatio ? `${selectedAsset.expenseRatio}%` : 'N/A'}</span>
+                </div>
+                
+                <h4 style={{ color: '#334155', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}><PieChart size={16}/> 前十大重仓股 (Top Holdings)</h4>
+                {selectedAsset.topHoldings && Object.keys(selectedAsset.topHoldings).length > 0 ? (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {Object.entries(selectedAsset.topHoldings).map(([name, percent]) => (
+                      <li key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                        <span style={{ color: '#475569', fontSize: '14px' }}>{name}</span>
+                        <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>{percent.toFixed(2)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p style={{ color: '#94a3b8', fontSize: '14px' }}>暂无重仓股数据</p>
+                )}
+              </div>
+            ) : (
+              /* --- 股票专属视图 --- */
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>市盈率 (P/E)</div>
+                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{selectedAsset.peRatio || 'N/A'}</div>
+                </div>
+                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>总市值 (Cap)</div>
+                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{formatMarketCap(selectedAsset.marketCap)}</div>
+                </div>
+                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>股息率 (Div Yield)</div>
+                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{selectedAsset.dividendYield ? `${(selectedAsset.dividendYield * 100).toFixed(2)}%` : '0.00%'}</div>
+                </div>
+                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>52周高点</div>
+                  <div style={{ fontWeight: 'bold', color: '#10b981', fontSize: '18px' }}>${selectedAsset.fiftyTwoWeekHigh || 'N/A'}</div>
+                </div>
+              </div>
+            )}
+            
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Holdings;
