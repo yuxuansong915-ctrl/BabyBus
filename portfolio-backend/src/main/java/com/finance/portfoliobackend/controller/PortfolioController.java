@@ -151,4 +151,63 @@ public class PortfolioController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    // ==========================================
+    // 5. 🚀 V2.0 核心：减仓/卖出 (Sell)
+    // ==========================================
+    @PostMapping("/sell")
+    public ResponseEntity<?> sellRecord(@RequestBody AddRecordRequest request) {
+        List<PortfolioItem> existingItems = repository.findAll();
+        Optional<PortfolioItem> itemOpt = existingItems.stream()
+                .filter(item -> item.getTicker().equalsIgnoreCase(request.getTicker()))
+                .findFirst();
+
+        if (itemOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body("您当前并未持有该资产，无法卖出！");
+        }
+        PortfolioItem item = itemOpt.get();
+
+        // 智能补全价格
+        Double finalPrice = request.getPrice();
+        if (finalPrice == null || finalPrice <= 0) {
+            List<Double> prices = financeService.getPriceHistory(request.getTicker());
+            finalPrice = prices.get(prices.size() - 1);
+        }
+
+        // 智能计算卖出数量
+        Integer finalShares = request.getShares();
+        if ((finalShares == null || finalShares <= 0) && request.getTotalCost() != null) {
+            finalShares = (int) Math.floor(request.getTotalCost() / finalPrice);
+        }
+        if (finalShares == null || finalShares <= 0) {
+            return ResponseEntity.badRequest().body("卖出股数或总金额必须至少填写一项！");
+        }
+
+        // 业务逻辑校验：不能卖出超过持有的数量
+        if (finalShares > item.getShares()) {
+            return ResponseEntity.badRequest().body("卖出数量（" + finalShares + "）超过了当前持有数量（" + item.getShares() + "）！");
+        }
+
+        // 扣减库存，如果全部卖光，则删除该记录
+        if (finalShares.equals(item.getShares())) {
+            repository.delete(item);
+        } else {
+            item.setShares(item.getShares() - finalShares);
+            repository.save(item);
+        }
+
+        // 记录行为金融学流水
+        TransactionRecord tx = new TransactionRecord();
+        tx.setTicker(request.getTicker().toUpperCase());
+        tx.setActionType("REMOVE"); // 标记为卖出
+        tx.setShares(finalShares);
+        tx.setPrice(finalPrice);
+        tx.setCurrency(request.getCurrency() != null ? request.getCurrency() : "USD");
+        tx.setEmotion(request.getEmotion() != null ? request.getEmotion() : "卖出未分类");
+        tx.setTimestamp(request.getDate() != null ? request.getDate().atStartOfDay() : LocalDateTime.now());
+        transactionRepo.save(tx);
+
+        financeService.flushCache();
+        return ResponseEntity.ok().build();
+    }
 }

@@ -2,14 +2,16 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Briefcase, LineChart, History, Settings as SettingsIcon } from 'lucide-react';
 import Holdings from './pages/Holdings';
+import Transactions from './pages/Transactions';
+import Dashboard from './pages/Dashboard';
 
 // ==========================================
 // 临时占位页面 (之后我们会逐个替换它们)
 // ==========================================
-const Dashboard = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📊 Dashboard 首页 (建设中...)</div>;
+// const Dashboard = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📊 Dashboard 首页 (建设中...)</div>;
 // const Holdings = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>💼 我的持仓记录 (建设中...)</div>;
 const Market = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>🌍 发现与行情筛选 (建设中...)</div>;
-const Transactions = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📜 行为金融学交易日志 (建设中...)</div>;
+// const Transactions = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>📜 行为金融学交易日志 (建设中...)</div>;
 const Settings = () => <div style={{ padding: '50px', textAlign: 'center', fontSize: '24px', color: '#7f8c8d' }}>⚙️ 风险控制与设置 (建设中...)</div>;
 
 // ==========================================

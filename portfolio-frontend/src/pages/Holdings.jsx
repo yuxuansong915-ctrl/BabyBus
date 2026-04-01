@@ -8,7 +8,7 @@ const Sparkline = ({ data }) => {
   if (!data || data.length === 0) return <span style={{color: '#94a3b8', fontSize: '12px'}}>暂无数据</span>;
   const chartData = data.map((price, i) => ({ index: i, price }));
   const isUp = data[data.length - 1] >= data[0];
-  const color = isUp ? '#10b981' : '#ef4444'; // 涨绿跌红
+  const color = isUp ? '#10b981' : '#ef4444';
 
   return (
     <div style={{ width: '100px', height: '40px' }}>
@@ -25,10 +25,14 @@ const Sparkline = ({ data }) => {
 const Holdings = () => {
   const [portfolio, setPortfolio] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedAsset, setSelectedAsset] = useState(null); // 右侧面板当前选中的资产
+  const [selectedAsset, setSelectedAsset] = useState(null); 
+  
+  // 弹窗状态管理
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalPrefill, setModalPrefill] = useState(null);
+  const [tradeMode, setTradeMode] = useState('ADD'); // 控制弹窗是买入还是卖出
 
-  // 拉取后端超级数据包
+  // 拉取后端数据
   const fetchData = () => {
     setIsLoading(true);
     fetch('http://localhost:8080/api/portfolio')
@@ -36,9 +40,15 @@ const Holdings = () => {
       .then(data => {
         setPortfolio(data);
         setIsLoading(false);
-        // 如果有数据且右侧没有选中项，默认选中第一个
+        
+        // 如果数据加载完且右侧没有选中项，默认选中第一个
         if (data.length > 0 && !selectedAsset) {
           setSelectedAsset(data[0]);
+        }
+        
+        // 如果某只股票被全部卖出了，它会从 data 里消失。我们需要清理一下右侧的详情页展示
+        if (selectedAsset && !data.find(item => item.id === selectedAsset.id)) {
+           setSelectedAsset(null);
         }
       })
       .catch(err => {
@@ -51,7 +61,6 @@ const Holdings = () => {
     fetchData();
   }, []);
 
-  // 将长数字格式化为带 B/M 的简写 (如 3.2T, 500B)
   const formatMarketCap = (num) => {
     if (!num) return 'N/A';
     if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
@@ -71,13 +80,17 @@ const Holdings = () => {
           <h2 style={{ margin: 0, color: '#0f172a', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Briefcase size={24} color="#3b82f6" /> 我的核心持仓
           </h2>
-          {/* 触发弹窗的按钮 (弹窗组件我们下一步写) */}
-        <button 
-        style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} 
-        onClick={() => setIsModalOpen(true)}
-        >
-        ➕ 记录新交易
-        </button>
+          {/* 顶部按钮：新建一笔没有任何预填的加仓记录 */}
+          <button 
+            style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }} 
+            onClick={() => {
+              setModalPrefill(null); // 清空预填
+              setTradeMode('ADD');   // 设为买入模式
+              setIsModalOpen(true);  // 打开弹窗
+            }}
+          >
+            ➕ 记录新交易
+          </button>
         </div>
 
         <div style={{ overflowY: 'auto', flex: '1' }}>
@@ -89,18 +102,19 @@ const Holdings = () => {
                 <th style={{ padding: '16px 8px' }}>当前市价</th>
                 <th style={{ padding: '16px 8px' }}>30日走势</th>
                 <th style={{ padding: '16px 8px' }}>总价值</th>
+                <th style={{ padding: '16px 8px', textAlign: 'right' }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>正在同步华尔街实时数据...</td></tr>
+                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>正在同步华尔街实时数据...</td></tr>
               ) : portfolio.map(item => (
                 <tr 
                   key={item.id} 
-                  onClick={() => setSelectedAsset(item)} // 点击行，将数据传给右侧面板
+                  onClick={() => setSelectedAsset(item)} 
                   style={{ 
                     borderBottom: '1px solid #f1f5f9', cursor: 'pointer', transition: 'all 0.2s',
-                    backgroundColor: selectedAsset?.id === item.id ? '#eff6ff' : 'transparent' // 选中行高亮
+                    backgroundColor: selectedAsset?.id === item.id ? '#eff6ff' : 'transparent' 
                   }}
                 >
                   <td style={{ padding: '16px 8px' }}>
@@ -111,6 +125,36 @@ const Holdings = () => {
                   <td style={{ padding: '16px 8px', fontWeight: '500' }}>${item.currentPrice?.toFixed(2)}</td>
                   <td style={{ padding: '16px 8px' }}><Sparkline data={item.priceTrend} /></td>
                   <td style={{ padding: '16px 8px', fontWeight: 'bold', color: '#0f172a' }}>${item.totalValue?.toFixed(2)}</td>
+                  
+                  {/* ========================================== */}
+                  {/* 行内操作按钮：加仓 与 卖出 */}
+                  {/* ========================================== */}
+                  <td style={{ padding: '16px 8px', textAlign: 'right' }}>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation(); 
+                          setModalPrefill({ ticker: item.ticker, assetType: item.assetType });
+                          setTradeMode('ADD'); // 买入模式
+                          setIsModalOpen(true);
+                        }}
+                        style={{ backgroundColor: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}
+                      >
+                        加仓
+                      </button>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setModalPrefill({ ticker: item.ticker, assetType: item.assetType });
+                          setTradeMode('SELL'); // 卖出模式
+                          setIsModalOpen(true);
+                        }}
+                        style={{ backgroundColor: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}
+                      >
+                        减仓 / 卖出
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -140,9 +184,7 @@ const Holdings = () => {
               </span>
             </div>
 
-            {/* 核心亮点：多态渲染逻辑！ */}
             {selectedAsset.assetType === 'ETF' ? (
-              /* --- ETF 专属视图 --- */
               <div>
                 <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#64748b' }}>管理费率 (Expense Ratio)</span>
@@ -164,7 +206,6 @@ const Holdings = () => {
                 )}
               </div>
             ) : (
-              /* --- 股票专属视图 --- */
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
                   <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>市盈率 (P/E)</div>
@@ -184,18 +225,22 @@ const Holdings = () => {
                 </div>
               </div>
             )}
-            
           </div>
         )}
       </div>
 
       {/* ========================================== */}
-      {/* 隐藏的弹窗组件 */}
+      {/* 隐藏的双模态弹窗组件 */}
       {/* ========================================== */}
       <AddRecordModal 
         isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSuccess={fetchData} // 记录成功后，调用 fetchData 刷新表格！
+        onClose={() => {
+          setIsModalOpen(false);
+          setModalPrefill(null); // 关闭时清空预填数据
+        }} 
+        onSuccess={fetchData}
+        prefillData={modalPrefill}
+        tradeMode={tradeMode}    // 将买卖模式传递给弹窗
       />
 
     </div>
