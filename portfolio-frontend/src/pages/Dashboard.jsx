@@ -58,17 +58,28 @@ const Dashboard = () => {
   .sort((a, b) => b.changePct - a.changePct) // 按涨幅降序
   .slice(0, 5); // 只取前 5 名
 
-  // ==========================================
-  // 2. 右侧上方：计算环形图数据 (Donut Chart)
+// ==========================================
+  // 2. 右侧上方：计算环形图数据 (Donut Chart) 
   // ==========================================
   const allocationMap = {};
   portfolio.forEach(item => {
     const type = item.assetType || 'OTHER';
     allocationMap[type] = (allocationMap[type] || 0) + (item.totalValue || 0);
   });
+
+  // 👇 修复报错：在这里补上 totalBalance 的计算
+  const totalBalance = portfolio.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+
+  // --- 读取红线风控参数 ---
+  const maxStockRatio = Number(localStorage.getItem('maxStockRatio')) || 70;
+  const currentStockRatio = totalBalance > 0 ? (allocationMap['STOCK'] || 0) / totalBalance * 100 : 0;
+  const isStockBreached = currentStockRatio > maxStockRatio;
+
+  // 构造资产占比饼图数据，如果违规，将股票切片的颜色标记出来
   const allocationData = Object.keys(allocationMap).map(key => ({
     name: key === 'STOCK' ? '股票' : key === 'ETF' ? '基金' : key,
-    value: allocationMap[key]
+    value: allocationMap[key],
+    fillColor: (key === 'STOCK' && isStockBreached) ? '#ef4444' : undefined 
   })).filter(item => item.value > 0);
 
   // ==========================================
@@ -180,7 +191,7 @@ const Dashboard = () => {
       <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
         {/* 上方：资产配置环形图 */}
-        <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+        {/* <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
           <h3 style={{ margin: '0 0 15px 0', color: '#0f172a', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Target size={18} color="#8b5cf6"/> 资产配置结构
           </h3>
@@ -189,6 +200,33 @@ const Dashboard = () => {
               <PieChart>
                 <Pie data={allocationData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
                   {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                </Pie>
+                <RechartsTooltip formatter={(value) => [`$${value.toFixed(2)}`, '价值']} />
+                <Legend verticalAlign="bottom" height={20} iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div> */}
+
+        {/* 在右侧上方环形图容器内，加上风控提示条 */}
+        <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+          <h3 style={{ margin: '0 0 15px 0', color: '#0f172a', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Target size={18} color="#8b5cf6"/> 资产配置结构
+          </h3>
+          
+          {/* 🚨 越界警报条 */}
+          {isStockBreached && (
+             <div style={{backgroundColor: '#fee2e2', color: '#991b1b', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center'}}>
+               ⚠️ 股票仓位 ({currentStockRatio.toFixed(1)}%) 已超标风控红线 ({maxStockRatio}%)!
+             </div>
+          )}
+
+          <div style={{ height: '220px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={allocationData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
+                  {/* 使用刚刚算好的 fillColor，如果没有就按正常顺序取色 */}
+                  {allocationData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fillColor || PIE_COLORS[index % PIE_COLORS.length]} />)}
                 </Pie>
                 <RechartsTooltip formatter={(value) => [`$${value.toFixed(2)}`, '价值']} />
                 <Legend verticalAlign="bottom" height={20} iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
