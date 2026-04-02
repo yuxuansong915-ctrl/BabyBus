@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import { Info, Activity, Briefcase } from 'lucide-react';
 import AddRecordModal from '../components/AddRecordModal';
+import KLineChart from '../components/KLineChart';
 
 // --- 内部小组件：迷你走势图 ---
 const Sparkline = ({ data }) => {
@@ -175,6 +176,13 @@ const Holdings = () => {
               <span style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
                 {selectedAsset.assetType === 'ETF' ? '基金 / ETF' : '股票'}
               </span>
+            </div>
+
+            {/* ========================================== */}
+            {/* 插入：置顶展示的专业 K线图 */}
+            {/* ========================================== */}
+            <div style={{ marginBottom: '25px', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', backgroundColor: '#fcfcfc' }}>
+               <KLineChart symbol={selectedAsset.ticker} height={220} />
             </div>
 
             {/* 股票详情面板 */}

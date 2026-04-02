@@ -34,10 +34,28 @@ const AddRecordModal = ({ isOpen, onClose, onSuccess, prefillData, tradeMode = '
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!ticker) return alert('请输入资产代码！');
-    if (!shares && !totalCost) return alert(isSell ? '请填写卖出股数或回笼资金总量！' : '【买入股数】和【总投入资金】请至少填写一项！');
+    if (!shares && !totalCost) return alert(isSell ? '请填写卖出数量或回笼资金总量！' : '【买入数量】和【总投入资金】请至少填写一项！');
 
     // ==========================================
-    // 🧠 核心干预逻辑：FOMO 拦截器
+    // 🧠 核心干预逻辑 1：止损冷静期温和预警
+    // ==========================================
+    const enableLossCooldown = localStorage.getItem('enableLossCooldown') === 'true';
+    if (enableLossCooldown) {
+      const cooldownUntil = localStorage.getItem('lossCooldownUntil');
+      if (cooldownUntil && Date.now() < parseInt(cooldownUntil)) {
+        const remainingHours = ((parseInt(cooldownUntil) - Date.now()) / (1000 * 60 * 60)).toFixed(1);
+        
+        // 使用 confirm 让用户自己做决定
+        const confirmCooldown = window.confirm(
+          `⏱️ 【冷静期预警】\n\n系统检测到您在不久前刚经历过一次止损割肉。\n目前您仍处于交易冷静期（剩余 ${remainingHours} 小时）。\n\n人在亏损后极易产生“复仇性交易”的冲动，导致错上加错。\n您确定自己现在的头脑是绝对清醒的，并且坚持要执行这笔交易吗？`
+        );
+        
+        if (!confirmCooldown) return; // 如果用户点击“取消”，放弃交易
+      }
+    }
+
+    // ==========================================
+    // 🧠 核心干预逻辑 2：FOMO 拦截器
     // ==========================================
     const enableFomoAlert = localStorage.getItem('enableFomoAlert') !== 'false'; // 默认开启
     if (!isSell && enableFomoAlert && emotion.includes('FOMO')) {
@@ -50,16 +68,31 @@ const AddRecordModal = ({ isOpen, onClose, onSuccess, prefillData, tradeMode = '
     setIsLoading(true);
     const payload = {
       ticker: ticker.toUpperCase(), assetType, date: date || null,
-      price: price ? parseFloat(price) : null, shares: shares ? parseInt(shares) : null,
+      price: price ? parseFloat(price) : null, 
+      // 修复：把 parseInt 换成 parseFloat，不再生吞加密货币的小数！
+      shares: shares ? parseFloat(shares) : null, 
       totalCost: totalCost ? parseFloat(totalCost) : null, currency, emotion
     };
 
-    fetch(`http://localhost:8080${apiEndpoint}`, {
+    // 强制使用 127.0.0.1 避免 localhost 解析问题
+    fetch(`http://127.0.0.1:8080${apiEndpoint}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     })
     .then(async (res) => {
       setIsLoading(false);
-      if (res.ok) { onSuccess(); onClose(); } 
+      if (res.ok) { 
+        // ==========================================
+        // 🧠 核心干预逻辑 3：触发冷静期倒计时
+        // ==========================================
+        if (isSell && emotion.includes('止损割肉') && enableLossCooldown) {
+          const lockTime = Date.now() + 24 * 60 * 60 * 1000; 
+          localStorage.setItem('lossCooldownUntil', lockTime.toString());
+          alert('⚠️ 止损指令已执行。\n\n系统已为您开启 24 小时交易冷静期。在接下来的 24 小时内，您发起新交易时系统将进行额外的高风险提示。');
+        }
+
+        onSuccess(); 
+        onClose(); 
+      } 
       else { alert(`❌ 操作失败: ${await res.text()}`); }
     })
     .catch(err => { setIsLoading(false); alert('网络请求失败'); });
@@ -85,7 +118,9 @@ const AddRecordModal = ({ isOpen, onClose, onSuccess, prefillData, tradeMode = '
               <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 'bold' }}>资产类型*</label>
               <select value={assetType} onChange={e => setAssetType(e.target.value)} disabled={isSell} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', backgroundColor: isSell ? '#f1f5f9' : 'white' }}>
                 <option value="STOCK">股票 (Stock)</option>
-                <option value="ETF">基金 (ETF)</option>
+                <option value="CRYPTO">加密货币 (Crypto)</option>
+                <option value="FOREX">外汇 (Forex)</option>
+                <option value="COMMODITIES">贵金属/大宗 (Commodities)</option>
               </select>
             </div>
           </div>
@@ -104,10 +139,12 @@ const AddRecordModal = ({ isOpen, onClose, onSuccess, prefillData, tradeMode = '
           <div style={{ backgroundColor: '#f1f5f9', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
             <label style={{ display: 'block', marginBottom: '12px', fontSize: '14px', fontWeight: 'bold' }}>交易规模 (填写其中一项即可)*</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <input type="number" value={shares} onChange={handleSharesChange} placeholder={isSell ? "卖出股数" : "买入股数"} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', opacity: totalCost ? 0.5 : 1 }} />
+              <input type="number" value={shares} onChange={handleSharesChange} placeholder={isSell ? "卖出数量" : "买入数量"} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', opacity: totalCost ? 0.5 : 1 }} />
               <div style={{ display: 'flex', gap: '10px' }}>
                 <select value={currency} onChange={e => setCurrency(e.target.value)} style={{ padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: 'white', width: '80px' }}>
-                  <option value="USD">USD</option><option value="CNY">CNY</option>
+                  <option value="USD">USD</option>
+                  <option value="CNY">CNY</option>
+                  <option value="HKD">HKD</option>
                 </select>
                 <input type="number" step="0.01" value={totalCost} onChange={handleTotalCostChange} placeholder={isSell ? "回笼资金总额" : "总投入资金"} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', boxSizing: 'border-box', opacity: shares ? 0.5 : 1 }} />
               </div>

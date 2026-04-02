@@ -229,10 +229,72 @@ public class YahooFinanceClient {
     private String normalizeSymbol(String code) {
         if (code == null) return "";
         code = code.trim().toUpperCase();
+
+        // 1. 处理美股 (.US -> 去掉后缀)
         if (code.endsWith(".US")) return code.substring(0, code.length() - 3);
+
+        // 2. 处理大宗商品
         if (code.equals("GOLD")) return "GC=F";
         if (code.equals("SILVER")) return "SI=F";
+
+        // 3. 处理加密货币 (BTCUSDT -> BTC-USD)
         if (code.endsWith("USDT")) return code.replace("USDT", "-USD");
+
+        // 4. 【核心修复】：处理外汇 (如 EURUSD -> EURUSD=X)
+        // 逻辑：如果是6位纯字母（标准的货币对格式），补上 =X
+        if (code.matches("^[A-Z]{6}$")) {
+            return code + "=X";
+        }
+
         return code;
+    }
+
+    // ==========================================
+    // 新增：专门用于前端绘制专业 K线/蜡烛图的 OHLC 数据接口
+    // 返回格式: [时间戳, 开盘价, 最高价, 最低价, 收盘价, 成交量]
+    // ==========================================
+    public List<double[]> getCandlestickData(String symbol, int days) {
+        List<double[]> klineData = new ArrayList<>();
+        try {
+            String sym = normalizeSymbol(symbol);
+            String url = BASE_URL + sym + "?interval=1d&range=" + days + "d";
+            String response = fetchFromYahoo(url);
+            if (response == null) return klineData;
+
+            JsonNode root = objectMapper.readTree(response);
+            JsonNode resultNode = root.path("chart").path("result").get(0);
+
+            if (resultNode != null) {
+                JsonNode timestampNode = resultNode.path("timestamp");
+                JsonNode quoteNode = resultNode.path("indicators").path("quote").get(0);
+
+                if (timestampNode != null && timestampNode.isArray() && quoteNode != null) {
+                    JsonNode openNode = quoteNode.path("open");
+                    JsonNode highNode = quoteNode.path("high");
+                    JsonNode lowNode = quoteNode.path("low");
+                    JsonNode closeNode = quoteNode.path("close");
+                    JsonNode volumeNode = quoteNode.path("volume");
+
+                    int len = timestampNode.size();
+                    for (int i = 0; i < len; i++) {
+                        // 过滤掉因为休市等原因产生的 null 节点
+                        if (!closeNode.get(i).isNull() && !openNode.get(i).isNull()) {
+                            // 统一转为 double，格式：[timestamp, open, high, low, close, volume]
+                            double t = timestampNode.get(i).asDouble();
+                            double o = openNode.get(i).asDouble();
+                            double h = highNode.get(i).asDouble();
+                            double l = lowNode.get(i).asDouble();
+                            double c = closeNode.get(i).asDouble();
+                            double v = volumeNode.get(i).asDouble();
+
+                            klineData.add(new double[]{t, o, h, l, c, v});
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Yahoo 蜡烛图 OHLC 数据获取失败: " + symbol + "，原因: " + e.getMessage());
+        }
+        return klineData;
     }
 }

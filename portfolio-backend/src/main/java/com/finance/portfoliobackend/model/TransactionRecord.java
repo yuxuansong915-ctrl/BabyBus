@@ -20,7 +20,7 @@ public class TransactionRecord {
 
     private String ticker;      // 资产代码
     private String actionType;  // 动作: "ADD" (加仓) 或 "SELL" (减仓)
-    private Integer shares;     // 交易数量
+    private Double shares;     // 交易数量
     private Double price;       // 交易单价
 
     // 👇 核心修复：增加总金额字段，解决 N/A 问题

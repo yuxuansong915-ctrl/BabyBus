@@ -185,4 +185,36 @@ public class FinanceDataService {
         if (!ticker.contains(".")) return ticker + ".US";
         return ticker;
     }
+
+    // ==========================================
+    // 1. 货币识别逻辑：根据 Ticker 后缀判断原始货币
+    // ==========================================
+    public String getCurrencyForTicker(String ticker) {
+        if (ticker == null) return "USD";
+        ticker = ticker.toUpperCase();
+
+        if (ticker.endsWith(".SS") || ticker.endsWith(".SZ")) return "CNY"; // 沪深 A 股
+        if (ticker.endsWith(".HK")) return "HKD"; // 港股
+        if (ticker.endsWith(".T") || ticker.endsWith(".JP")) return "JPY"; // 日股
+
+        // 外汇处理：如 EURUSD，通常以收盘价计价，此处简化处理
+        // 加密货币：BTCUSDT，计价单位通常为 USD
+        return "USD"; // 默认美股、加密货币、黄金等均为 USD
+    }
+
+    // ==========================================
+    // 2. 汇率转换引擎：将各币种统一折算为 USD
+    // ==========================================
+    public double convertToUSD(double amount, String fromCurrency) {
+        if (fromCurrency.equals("USD")) return amount;
+
+        // 这里建议使用固定的汇率系数（或者你可以未来接入一个专门的汇率 API）
+        // 以下为常用汇率参考值
+        Map<String, Double> exchangeRates = new HashMap<>();
+        exchangeRates.put("CNY", 0.138); // 1 CNY ≈ 0.138 USD
+        exchangeRates.put("HKD", 0.128); // 1 HKD ≈ 0.128 USD
+        exchangeRates.put("JPY", 0.0066); // 1 JPY ≈ 0.0066 USD
+
+        return amount * exchangeRates.getOrDefault(fromCurrency, 1.0);
+    }
 }

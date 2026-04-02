@@ -9,7 +9,7 @@ public class PortfolioItemDTO {
     private Long id;
     private String ticker;
     private String assetType;    // 新增：资产类型 (STOCK, ETF等)
-    private Integer shares;
+    private Double shares;
     private Double currentPrice;
     private Double totalValue;
     private Double change;

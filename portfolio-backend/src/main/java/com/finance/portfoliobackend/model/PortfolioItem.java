@@ -24,7 +24,7 @@ public class PortfolioItem {
     // 资产类型标识 (例如: "STOCK" 代表股票, "ETF" 代表基金, "CRYPTO" 代表加密货币)
     private String assetType;
 
-    private Integer shares;     // 持有数量
+    private Double shares;     // 持有数量
 
     // === 行情缓存字段（API 调用成功后自动更新，用户无感知）===
     private Double cachedPrice;        // 缓存的当前价格

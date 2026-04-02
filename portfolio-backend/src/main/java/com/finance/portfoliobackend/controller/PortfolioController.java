@@ -58,7 +58,15 @@ public class PortfolioController {
 
             // 2. 重新计算总价值
             if (dto.getCurrentPrice() > 0) {
-                dto.setTotalValue(dto.getCurrentPrice() * item.getShares());
+                // a. 计算该资产在其原始货币下的总价值 (Native Value)
+                double nativeTotalValue = dto.getCurrentPrice() * item.getShares();
+
+                // b. 识别该资产的原始货币
+                String nativeCurrency = financeService.getCurrencyForTicker(item.getTicker());
+
+                // c. 转换为统一基准货币 (USD) 并存入 DTO
+                double unifiedValue = financeService.convertToUSD(nativeTotalValue, nativeCurrency);
+                dto.setTotalValue(unifiedValue);
             }
 
             // 3. 后台异步刷新 Finnhub 缓存
@@ -72,9 +80,68 @@ public class PortfolioController {
     // ==========================================
     // 1. 处理买入请求
     // ==========================================
+// ==========================================
+    // 终极修复版：支持小数 + 自动推算数量 + 自动抓取现价
+    // ==========================================
     @PostMapping("/add")
     public ResponseEntity<?> addRecord(@RequestBody AddRecordRequest request) {
-        return processTrade(request, "ADD");
+        try {
+            Double execPrice = request.getPrice();
+
+            // 1. 智能兜底：如果前端没传单价，自动去 Yahoo 抓取最新价！
+            if (execPrice == null || execPrice <= 0) {
+                YahooFinanceClient.AssetQuote quote = yahooClient.getQuote(request.getTicker());
+                if (quote != null && quote.getRegularMarketPrice() > 0) {
+                    execPrice = quote.getRegularMarketPrice();
+                } else {
+                    return ResponseEntity.badRequest().body("未能自动获取到现价，请手动输入成交单价！");
+                }
+            }
+
+            Double execShares = request.getShares();
+            Double totalCost = request.getTotalCost();
+
+            // 2. 核心大脑：智能互相推算！(解决只填总金额时数量为 0 的 Bug)
+            if (execShares == null && totalCost != null && execPrice > 0) {
+                execShares = totalCost / execPrice; // 用总金额除以现价，算出精确的小数份额
+            } else if (totalCost == null && execShares != null && execPrice > 0) {
+                totalCost = execShares * execPrice;
+            }
+
+            // 兜底检查
+            if (execShares == null || execShares <= 0) {
+                return ResponseEntity.badRequest().body("交易数量计算异常，请检查输入参数");
+            }
+
+            // 3. 更新持仓表
+            PortfolioItem item = repository.findByTicker(request.getTicker()).orElseGet(() -> {
+                PortfolioItem newItem = new PortfolioItem();
+                newItem.setTicker(request.getTicker());
+                newItem.setAssetType(request.getAssetType());
+                newItem.setShares(0.0); // 必须是 Double
+                return newItem;
+            });
+
+            item.setShares(item.getShares() + execShares); // 累加小数份额
+            PortfolioItem savedItem = repository.save(item);
+
+            // 4. 记录流水
+            TransactionRecord record = new TransactionRecord();
+            record.setTicker(request.getTicker());
+            record.setActionType("ADD");
+            record.setShares(execShares);
+            record.setPrice(execPrice);
+            record.setCurrency(request.getCurrency() != null ? request.getCurrency() : "USD");
+            record.setEmotion(request.getEmotion());
+            record.setTimestamp(LocalDateTime.now());
+            transactionRepo.save(record);
+
+            return ResponseEntity.ok(savedItem);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("处理失败: " + e.getMessage());
+        }
     }
 
     // ==========================================
@@ -103,16 +170,16 @@ public class PortfolioController {
                 }
             }
 
-            Integer execShares = request.getShares();
+            Double execShares = request.getShares();
             Double totalCost = request.getTotalCost();
 
             // 智能算账：如果只填了总投入没填股数，或者填了股数没填总投入，系统自动反推
             if (execShares == null && totalCost != null && execPrice > 0) {
-                execShares = (int) (totalCost / execPrice);
+                execShares = totalCost / execPrice;
             } else if (totalCost == null && execShares != null && execPrice > 0) {
                 totalCost = execShares * execPrice;
             }
-            if (execShares == null) execShares = 0;
+            if (execShares == null) execShares = 0.0;
             if (totalCost == null) totalCost = 0.0;
 
             // 获取当前持仓
@@ -140,7 +207,7 @@ public class PortfolioController {
                     item = new PortfolioItem();
                     item.setTicker(request.getTicker());
                     item.setAssetType(request.getAssetType());
-                    item.setShares(0);
+                    item.setShares(0.0);
                 }
                 item.setShares(item.getShares() + execShares); // 加上股数
                 repository.save(item);
@@ -192,12 +259,20 @@ public class PortfolioController {
         LocalDateTime expirationTime = LocalDateTime.now().minusMinutes(15); // 设置保质期为 15 分钟
 
         // 3. 组装数据并检查是否过期
+        boolean weekendClosed = isWeekend(); // 探测今天是否休市
+
         for (MarketCache cache : cachedData) {
-            AssetSearchResult r = convertToSearchResult(cache); // 使用你现成的转换方法
+            AssetSearchResult r = convertToSearchResult(cache);
             results.add(r);
 
-            // 只要有一个资产的最后更新时间比 15 分钟前还早，就说明数据过期了
-            if (cache.getLastUpdated() == null || cache.getLastUpdated().isBefore(expirationTime)) {
+            // 【核心拦截】：如果是周末，强制跳过过期检查（不更新）！
+            // 除非是第一次查（lastUpdated 为 null），否则周末绝对不触发 needsUpdate
+            if (!weekendClosed) {
+                if (cache.getLastUpdated() == null || cache.getLastUpdated().isBefore(expirationTime)) {
+                    needsUpdate = true;
+                }
+            } else if (cache.getLastUpdated() == null) {
+                // 即使是周末，如果连基础缓存都没有，还是得破例拉取一次
                 needsUpdate = true;
             }
         }
@@ -270,6 +345,17 @@ public class PortfolioController {
         return yahooClient.getMarketKlineData(symbol, days);
     }
 
+    // ==========================================
+    // 新增 API：前端 K线图表专属端点
+    // ==========================================
+    @GetMapping("/market/candlestick")
+    public List<double[]> getCandlestickChartData(
+            @RequestParam String symbol,
+            @RequestParam(defaultValue = "90") int days) {
+        // 默认拉取过去 90 天（约 3 个月）的数据，画出来的 K线图最丰满好看
+        return yahooClient.getCandlestickData(symbol, days);
+    }
+
     public static class AssetSearchResult {
         private String ticker;
         private String name;
@@ -297,5 +383,14 @@ public class PortfolioController {
         public void setDayHigh(double dayHigh) { this.dayHigh = dayHigh; }
         public double getDayLow() { return dayLow; }
         public void setDayLow(double dayLow) { this.dayLow = dayLow; }
+    }
+
+    // ==========================================
+    // 新增：简单粗暴的周末休市探测器
+    // ==========================================
+    private boolean isWeekend() {
+        java.time.DayOfWeek day = java.time.LocalDate.now().getDayOfWeek();
+        // 如果是周六或周日，返回 true
+        return day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY;
     }
 }

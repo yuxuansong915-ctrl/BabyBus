@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Globe, TrendingUp, TrendingDown, BarChart2, Plus, Activity, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import AddRecordModal from '../components/AddRecordModal';
+import KLineChart from '../components/KLineChart';
 
 // --- 预定义各类别优质资产列表（Finnhub 兼容格式）---
 const ASSET_LISTS = {
@@ -198,6 +199,7 @@ const Market = () => {
   const [assetsLoading, setAssetsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalPrefill, setModalPrefill] = useState(null);
+  const [expandedRow, setExpandedRow] = useState(null);
 
   // 加载指数历史走势（Yahoo Finance K 线）
   useEffect(() => {
@@ -467,55 +469,63 @@ const Market = () => {
               </thead>
               <tbody>
                 {assets.map((asset, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ padding: '12px 8px' }}>
-                      <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{asset.ticker}</div>
-                    </td>
-                    <td style={{ padding: '12px 8px' }}>
-                      <div style={{ fontSize: '13px', color: '#475569' }}>{asset.name}</div>
-                    </td>
-                    <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>
-                      {asset.price > 0 ? (
-                        asset.ticker.match(/^[A-Z]{6}$/) || asset.ticker === 'XAUUSD' || asset.ticker === 'XAGUSD' || asset.ticker === 'XPTUSD' || asset.ticker === 'XPDUSD'
-                          ? `$${formatForexPrice(asset.price)}`
-                          : `$${asset.price.toFixed(2)}`
-                      ) : '—'}
-                    </td>
-                    <td style={{ padding: '12px 8px' }}>
-                      {asset.changePercent !== 0 ? (
-                        <span style={{ color: asset.changePercent >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {asset.changePercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                          {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent?.toFixed(2)}%
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td style={{ padding: '12px 8px', fontSize: '13px', color: '#64748b' }}>
-                      {formatVolume(asset.volume)}
-                    </td>
-                    <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                      <button
-                        onClick={() => {
-                          setModalPrefill({ ticker: asset.ticker, assetType: asset.defaultType || asset.type });
-                          setIsModalOpen(true);
-                        }}
-                        style={{
-                          backgroundColor: '#2563eb',
-                          color: 'white',
-                          border: 'none',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontSize: '12px'
-                        }}
-                      >
-                        <Plus size={14} /> 买入
-                      </button>
-                    </td>
-                  </tr>
+                  <React.Fragment key={i}>
+                    {/* 1. 给原本的行加上 onClick 和鼠标手势 */}
+                    <tr 
+                      style={{ borderBottom: '1px solid #f8fafc', cursor: 'pointer', backgroundColor: expandedRow === asset.ticker ? '#f8fafc' : 'transparent', transition: 'background-color 0.2s' }}
+                      onClick={() => setExpandedRow(expandedRow === asset.ticker ? null : asset.ticker)}
+                    >
+                      <td style={{ padding: '12px 8px' }}>
+                        <div style={{ fontWeight: 'bold', color: '#0f172a' }}>{asset.ticker}</div>
+                      </td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <div style={{ fontSize: '13px', color: '#475569' }}>{asset.name}</div>
+                      </td>
+                      <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>
+                        {asset.price > 0 ? (
+                          asset.ticker.match(/^[A-Z]{6}$/) || asset.ticker === 'XAUUSD' || asset.ticker === 'XAGUSD' || asset.ticker === 'XPTUSD' || asset.ticker === 'XPDUSD'
+                            ? `$${formatForexPrice(asset.price)}`
+                            : `$${asset.price.toFixed(2)}`
+                        ) : '—'}
+                      </td>
+                      <td style={{ padding: '12px 8px' }}>
+                        {asset.changePercent !== 0 ? (
+                          <span style={{ color: asset.changePercent >= 0 ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {asset.changePercent >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                            {asset.changePercent >= 0 ? '+' : ''}{asset.changePercent?.toFixed(2)}%
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td style={{ padding: '12px 8px', fontSize: '13px', color: '#64748b' }}>
+                        {formatVolume(asset.volume)}
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // 核心：防止点击买入按钮时触发展开行！
+                            setModalPrefill({ ticker: asset.ticker, assetType: asset.defaultType || asset.type });
+                            setIsModalOpen(true);
+                          }}
+                          style={{ backgroundColor: '#2563eb', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
+                        >
+                          <Plus size={14} /> 买入
+                        </button>
+                      </td>
+                    </tr>
+                    
+                    {/* 2. 插入隐藏的 K线图行 */}
+                    {expandedRow === asset.ticker && (
+                      <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <td colSpan="6" style={{ padding: '0 20px 20px 20px' }}>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px' }}>
+                             <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#64748b' }}>过去 90 天 K线走势</span>
+                           </div>
+                           {/* 召唤我们刚写好的专业 K线组件 */}
+                           <KLineChart symbol={asset.ticker} height={280} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

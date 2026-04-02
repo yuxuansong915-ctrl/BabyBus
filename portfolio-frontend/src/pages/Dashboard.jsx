@@ -75,9 +75,20 @@ const Dashboard = () => {
   const currentStockRatio = totalBalance > 0 ? (allocationMap['STOCK'] || 0) / totalBalance * 100 : 0;
   const isStockBreached = currentStockRatio > maxStockRatio;
 
-  // 构造资产占比饼图数据，如果违规，将股票切片的颜色标记出来
+// --- 替换 Dashboard.jsx 中对应的这部分代码 ---
+
+  // 1. 新增：全局品类字典
+  const ASSET_LABELS = {
+    STOCK: '股票',
+    ETF: '基金/ETF',
+    CRYPTO: '加密货币',
+    FOREX: '外汇',
+    COMMODITIES: '贵金属'
+  };
+
+  // 2. 构造资产占比饼图数据，动态读取字典
   const allocationData = Object.keys(allocationMap).map(key => ({
-    name: key === 'STOCK' ? '股票' : key === 'ETF' ? '基金' : key,
+    name: ASSET_LABELS[key] || key, // 修复：动态显示真实品类名
     value: allocationMap[key],
     fillColor: (key === 'STOCK' && isStockBreached) ? '#ef4444' : undefined 
   })).filter(item => item.value > 0);
