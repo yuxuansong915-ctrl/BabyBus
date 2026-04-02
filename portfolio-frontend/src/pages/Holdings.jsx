@@ -1,3 +1,9 @@
+/*
+  持仓管理页面组件 Holdings
+  展示完整的持仓表格，支持查看资产详情、加仓、减仓/卖出操作；
+  左侧表格展示持仓数据与迷你涨跌走势图，右侧展示选中资产的深度分析数据，
+  点击操作打开交易弹窗，交易成功后自动刷新列表，实现全流程持仓管理
+*/
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 import { Info, Activity, Briefcase } from 'lucide-react';
