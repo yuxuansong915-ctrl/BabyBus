@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
-import { TrendingUp, TrendingDown, Info, PieChart, Activity, Briefcase } from 'lucide-react';
+import { Info, Activity, Briefcase } from 'lucide-react';
 import AddRecordModal from '../components/AddRecordModal';
 
 // --- 内部小组件：迷你走势图 ---
@@ -35,7 +35,8 @@ const Holdings = () => {
   // 拉取后端数据
   const fetchData = () => {
     setIsLoading(true);
-    fetch('http://localhost:8080/api/portfolio')
+    // 【核心修改】：将 localhost 改为 127.0.0.1，强制走 IPv4 协议，彻底解决连接被拒绝的问题
+    fetch('http://127.0.0.1:8080/api/portfolio')
       .then(res => res.json())
       .then(data => {
         setPortfolio(data);
@@ -60,14 +61,6 @@ const Holdings = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  const formatMarketCap = (num) => {
-    if (!num) return 'N/A';
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-    return num;
-  };
 
   return (
     <div style={{ display: 'flex', gap: '30px', height: 'calc(100vh - 150px)' }}>
@@ -180,51 +173,65 @@ const Holdings = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
               <h3 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>{selectedAsset.ticker}</h3>
               <span style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
-                {selectedAsset.assetType === 'ETF' ? '基金 / ETF' : '股票 / STOCK'}
+                {selectedAsset.assetType === 'ETF' ? '基金 / ETF' : '股票'}
               </span>
             </div>
 
-            {selectedAsset.assetType === 'ETF' ? (
-              <div>
-                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748b' }}>管理费率 (Expense Ratio)</span>
-                  <span style={{ fontWeight: 'bold', color: '#ef4444' }}>{selectedAsset.expenseRatio ? `${selectedAsset.expenseRatio}%` : 'N/A'}</span>
-                </div>
-                
-                <h4 style={{ color: '#334155', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}><PieChart size={16}/> 前十大重仓股 (Top Holdings)</h4>
-                {selectedAsset.topHoldings && Object.keys(selectedAsset.topHoldings).length > 0 ? (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                    {Object.entries(selectedAsset.topHoldings).map(([name, percent]) => (
-                      <li key={name} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px dashed #e2e8f0' }}>
-                        <span style={{ color: '#475569', fontSize: '14px' }}>{name}</span>
-                        <span style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '14px' }}>{percent.toFixed(2)}%</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p style={{ color: '#94a3b8', fontSize: '14px' }}>暂无重仓股数据</p>
-                )}
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
-                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>市盈率 (P/E)</div>
-                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{selectedAsset.peRatio || 'N/A'}</div>
-                </div>
-                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
-                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>总市值 (Cap)</div>
-                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{formatMarketCap(selectedAsset.marketCap)}</div>
-                </div>
-                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
-                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>股息率 (Div Yield)</div>
-                  <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{selectedAsset.dividendYield ? `${(selectedAsset.dividendYield * 100).toFixed(2)}%` : '0.00%'}</div>
-                </div>
-                <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
-                  <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>52周高点</div>
-                  <div style={{ fontWeight: 'bold', color: '#10b981', fontSize: '18px' }}>${selectedAsset.fiftyTwoWeekHigh || 'N/A'}</div>
+            {/* 股票详情面板 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>当前价格</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>
+                  ${selectedAsset.currentPrice ? selectedAsset.currentPrice.toFixed(2) : '—'}
                 </div>
               </div>
-            )}
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>持仓数量</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>{selectedAsset.shares}</div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>总价值</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>
+                  ${selectedAsset.totalValue ? selectedAsset.totalValue.toFixed(2) : '—'}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>市值</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>
+                  {selectedAsset.marketCap
+                    ? selectedAsset.marketCap >= 1e12
+                      ? `$${(selectedAsset.marketCap / 1e12).toFixed(2)}T`
+                      : selectedAsset.marketCap >= 1e9
+                        ? `$${(selectedAsset.marketCap / 1e9).toFixed(2)}B`
+                        : `$${(selectedAsset.marketCap / 1e6).toFixed(2)}M`
+                    : '—'}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>市盈率 P/E</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>
+                  {selectedAsset.peRatio ? selectedAsset.peRatio.toFixed(2) : '—'}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>52周最高</div>
+                <div style={{ fontWeight: 'bold', color: '#10b981', fontSize: '18px' }}>
+                  {selectedAsset.fiftyTwoWeekHigh ? `$${selectedAsset.fiftyTwoWeekHigh.toFixed(2)}` : '—'}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>52周最低</div>
+                <div style={{ fontWeight: 'bold', color: '#ef4444', fontSize: '18px' }}>
+                  {selectedAsset.fiftyTwoWeekLow ? `$${selectedAsset.fiftyTwoWeekLow.toFixed(2)}` : '—'}
+                </div>
+              </div>
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px' }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '5px' }}>股息率</div>
+                <div style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '18px' }}>
+                  {selectedAsset.dividendYield ? `${selectedAsset.dividendYield.toFixed(2)}%` : '—'}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
