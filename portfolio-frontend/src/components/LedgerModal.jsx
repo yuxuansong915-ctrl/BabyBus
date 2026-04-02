@@ -1,3 +1,8 @@
+/*
+  资金流水弹窗组件 LedgerModal
+  作用：打开弹窗后自动从后端获取所有交易记录，按时间倒序展示
+  包含加载状态、空数据提示、表格展示、买入/卖出样式区分，支持关闭与滚动查看
+*/
 import React, { useState, useEffect } from 'react';
 
 const LedgerModal = ({ onClose }) => {
