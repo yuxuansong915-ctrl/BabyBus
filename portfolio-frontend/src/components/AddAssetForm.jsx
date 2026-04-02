@@ -1,3 +1,12 @@
+/**用户输入股票代码
+   用户输入买入数量
+   点击确认买入
+   前端做基础校验（不能为空、不能≤0）
+   发送请求给后端接口
+   后端处理买入逻辑
+   成功 → 清空输入框 + 刷新列表
+   失败 → 弹出错误提示 */
+
 import React, { useState } from 'react';
 
 const AddAssetForm = ({ refreshData }) => {
