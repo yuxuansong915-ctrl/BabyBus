@@ -1,3 +1,8 @@
+/*
+  全球市场行情页面组件 Market
+  提供大盘指数走势查看、多类别资产（股票/外汇/贵金属/加密货币）实时行情展示，
+  支持搜索、分页、快速买入操作，对接后端获取实时报价与K线数据，实现一站式市场浏览与交易入口
+*/
 import React, { useState, useEffect } from 'react';
 import { Search, Globe, TrendingUp, TrendingDown, BarChart2, Plus, Activity, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';

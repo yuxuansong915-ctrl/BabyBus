@@ -1,3 +1,8 @@
+/*
+  交易行为审计页面组件 Transactions
+  展示所有历史交易记录，按时间倒序排列，包含买卖类型、资产、价格、金额等信息；
+  并通过情绪标签可视化投资决策心理，帮助用户复盘交易行为，实现行为金融学审计
+*/
 import React, { useState, useEffect } from 'react';
 import { History, ArrowDownRight, ArrowUpRight, BrainCircuit, Filter } from 'lucide-react';
 
