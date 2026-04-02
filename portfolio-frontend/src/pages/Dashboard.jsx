@@ -1,3 +1,9 @@
+/*
+  资产概览仪表盘组件 Dashboard
+  从后端获取持仓数据，展示今日领涨资产排名、资产配置环形图、总资产净值走势；
+  支持时间范围切换、涨跌颜色区分、股票仓位风控预警，整体呈现专业的投资组合可视化效果
+*/
+
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, Target, Activity, Trophy } from 'lucide-react';
