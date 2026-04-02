@@ -6,6 +6,8 @@ import Transactions from './pages/Transactions';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Market from './pages/Market';
+// 🎯 修改点 1：引入你刚刚新建的 AIChat 页面组件
+import AIChat from './pages/AIChat';
 
 const Navbar = () => {
   const location = useLocation();
@@ -20,8 +22,6 @@ const Navbar = () => {
 
   return (
     <nav style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0 40px', display: 'flex', alignItems: 'center', height: '70px', position: 'sticky', top: 0, zIndex: 1000, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-      
-      {/* 🎯 修改点：将 Logo 用 Link 包裹，点击直接跳回 '/' (Dashboard) */}
       <Link to="/" style={{ display: 'flex', alignItems: 'center', marginRight: '60px', textDecoration: 'none' }}>
         <div style={{ width: '32px', height: '32px', backgroundColor: '#2563eb', borderRadius: '8px', marginRight: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' }}>P</div>
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1e293b', margin: 0, letterSpacing: '-0.5px' }}>PortfolioPro</h1>
@@ -67,6 +67,8 @@ function App() {
             <Route path="/market" element={<Market />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/settings" element={<Settings />} />
+            {/* 🎯 修改点 2：注册新的 /ai-chat 路由，并绑定到 AIChat 组件 */}
+            <Route path="/ai-chat" element={<AIChat />} />
           </Routes>
         </main>
       </div>

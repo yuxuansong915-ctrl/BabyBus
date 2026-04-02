@@ -1,12 +1,21 @@
 spring:
   datasource:
-    # ??? 3306 ??????portfolio_db ?????????
+    # 连接本地 3306 端口的 portfolio_db 数据库
     url: jdbc:mysql://localhost:3306/portfolio_db?useSSL=false&serverTimezone=UTC&characterEncoding=utf8
     username: root
-    password: 123456  # ?? ??????? MySQL ???
+    password: 123456  # 你的 MySQL 密码
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
-      ddl-auto: update # ???????
-    show-sql: true     # ?????? SQL ???????
+      ddl-auto: update # 自动更新表结构
+    show-sql: true     # 控制台打印 SQL 语句
+
+# ==========================================
+# 🤖 DeepSeek AI 专属配置 (注意：与 spring 顶格平级)
+# ==========================================
+deepseek:
+  api:
+    key: sk-5c4627e7dc664f66bb7b6c1d1f6f0a00   # ⚠️ 记得把这里换成你的 Key
+    url: https://api.deepseek.com/chat/completions
+    model: deepseek-chat

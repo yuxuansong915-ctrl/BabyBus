@@ -158,8 +158,10 @@ const Holdings = () => {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
               <h3 style={{ fontSize: '28px', margin: 0, color: '#0f172a' }}>{selectedAsset.ticker}</h3>
-              <span style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
-                {selectedAsset.assetType === 'ETF' ? 'ETF' : 'Stock'}
+              
+              {/* 🎯 修复点：直接读取 assetType，用 textTransform 自动实现首字母大写 */}
+              <span style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize' }}>
+                {selectedAsset.assetType ? selectedAsset.assetType.toLowerCase() : 'Asset'}
               </span>
             </div>
 

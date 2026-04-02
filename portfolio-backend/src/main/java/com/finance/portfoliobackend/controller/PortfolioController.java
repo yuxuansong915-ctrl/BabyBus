@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.concurrent.CompletableFuture;
+import com.finance.portfoliobackend.service.DeepSeekAIService;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -29,6 +30,8 @@ public class PortfolioController {
     @Autowired private MarketCacheRepository marketCacheRepo;
     @Autowired private FinanceDataService financeService;
     @Autowired private YahooFinanceClient yahooClient; // 注入新客户端
+    // 找到你原有的 @Autowired 代码块，加上这行：
+    @Autowired private DeepSeekAIService aiService;
 
     @GetMapping
     public List<PortfolioItemDTO> getAllItems() {
@@ -392,5 +395,46 @@ public class PortfolioController {
         java.time.DayOfWeek day = java.time.LocalDate.now().getDayOfWeek();
         // 如果是周六或周日，返回 true
         return day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY;
+    }
+
+    // ==========================================
+    // 🤖 AI Agent 专属接口：生成投资组合深度研报
+    // ==========================================
+    @GetMapping("/ai/analyze")
+    public ResponseEntity<?> getAiAnalysis() {
+        try {
+            // 1. 复用你之前写好的完美方法，拉取带最新行情的持仓 DTO
+            List<PortfolioItemDTO> currentPortfolio = getAllItems();
+
+            // 2. 组装喂给 AI 的上下文数据
+            Map<String, Object> aiContext = new HashMap<>();
+            aiContext.put("portfolio", currentPortfolio);
+            // 还能加上用户的风控红线，让 AI 帮忙盯盘
+            aiContext.put("maxStockRatioLimit", 70.0);
+
+            // 3. 呼叫 DeepSeek 大脑
+            String markdownReport = aiService.generatePortfolioInsights(aiContext);
+
+            // 4. 返回给前端
+            return ResponseEntity.ok(Map.of("report", markdownReport));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("AI Analysis Request Failed: " + e.getMessage());
+        }
+    }
+
+    // 在 @GetMapping("/ai/analyze") 的下方新增这个 POST 接口
+    @PostMapping("/ai/chat")
+    public ResponseEntity<?> continueAiChat(@RequestBody Map<String, Object> request) {
+        try {
+            // 接收前端传来的完整聊天历史
+            List<Map<String, String>> messages = (List<Map<String, String>>) request.get("messages");
+            String reply = aiService.chatWithHistory(messages);
+            return ResponseEntity.ok(Map.of("reply", reply));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("Chat failed: " + e.getMessage());
+        }
     }
 }
