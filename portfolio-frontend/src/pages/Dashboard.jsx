@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, Target, Activity, Trophy } from 'lucide-react';
+import KLineChart from '../components/KLineChart';
 
 const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#64748b'];
 
-// Generate trading dates (skip weekends)
 const generateTradingDates = (daysCount) => {
   let dates = [];
   let currentDate = new Date();
@@ -18,29 +18,97 @@ const generateTradingDates = (daysCount) => {
   return dates;
 };
 
+const calculateXIRR = (cashFlows) => {
+  if (!cashFlows || cashFlows.length < 2) return null;
+  cashFlows.sort((a, b) => a.date - b.date);
+
+  const hasPositive = cashFlows.some(cf => cf.amount > 0);
+  const hasNegative = cashFlows.some(cf => cf.amount < 0);
+  if (!hasPositive || !hasNegative) return null;
+
+  const xnpv = (rate) => {
+    return cashFlows.reduce((sum, cf) => {
+      const t = (cf.date - cashFlows[0].date) / (1000 * 60 * 60 * 24 * 365.25);
+      return sum + cf.amount / Math.pow(1 + rate, t);
+    }, 0);
+  };
+
+  const xnpvDerivative = (rate) => {
+    return cashFlows.reduce((sum, cf) => {
+      const t = (cf.date - cashFlows[0].date) / (1000 * 60 * 60 * 24 * 365.25);
+      return sum - (t * cf.amount) / Math.pow(1 + rate, t + 1);
+    }, 0);
+  };
+
+  let rate = 0.1; 
+  for (let i = 0; i < 100; i++) {
+    const npv = xnpv(rate);
+    const dNpv = xnpvDerivative(rate);
+    if (Math.abs(dNpv) < 1e-10) return null; 
+    const nextRate = rate - npv / dNpv;
+    if (Math.abs(nextRate - rate) < 1e-6) return nextRate;
+    rate = nextRate;
+  }
+  return null; 
+};
+
 const Dashboard = () => {
   const [portfolio, setPortfolio] = useState([]);
+  const [ledger, setLedger] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('1M');
+  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/portfolio')
-      .then(res => res.json())
-      .then(data => {
-        setPortfolio(data);
-        setIsLoading(false);
-      })
-      .catch(err => {
-        console.error("Failed to fetch overview:", err);
-        setIsLoading(false);
-      });
+    Promise.all([
+      fetch('http://127.0.0.1:8080/api/portfolio').then(res => res.json()),
+      fetch('http://127.0.0.1:8080/api/portfolio/ledger').then(res => res.json())
+    ])
+    .then(([portfolioData, ledgerData]) => {
+      setPortfolio(portfolioData);
+      setLedger(ledgerData);
+      setIsLoading(false);
+    })
+    .catch(err => {
+      console.error("Failed to fetch dashboard data:", err);
+      setIsLoading(false);
+    });
   }, []);
 
+  const totalBalance = portfolio.reduce((sum, item) => sum + (item.totalValue || 0), 0);
+
+  const calculatedXirr = useMemo(() => {
+    if (ledger.length === 0) return 'NO_DATA';
+    
+    // 🎯 修复 1：兜底推算历史旧数据的金额
+    const cashFlows = ledger.map(tx => {
+      const cost = tx.totalCost || (tx.price * tx.shares) || 0;
+      return {
+        amount: tx.actionType === 'ADD' ? -cost : cost,
+        date: new Date(tx.timestamp)
+      };
+    }).filter(cf => cf.amount !== 0);
+
+    if (totalBalance > 0) {
+      cashFlows.push({
+        amount: totalBalance,
+        date: new Date()
+      });
+    }
+
+    // 🎯 修复 2：处理“同一天”悖论，如果建仓距今不到 24 小时，则不强行算年化
+    if (cashFlows.length > 1) {
+      const timeDiffHours = (cashFlows[cashFlows.length - 1].date - cashFlows[0].date) / (1000 * 60 * 60);
+      if (timeDiffHours < 24) return 'SAME_DAY';
+    }
+
+    return calculateXIRR(cashFlows);
+  }, [ledger, totalBalance]);
+
   if (isLoading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#64748b' }}>Aggregating asset data...</div>;
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh', color: '#64748b' }}>Loading dashboard data...</div>;
   }
 
-  // Calculate top performers
   const topPerformers = portfolio.map(item => {
     const prices = item.priceTrend || [];
     let changePct = 0;
@@ -56,14 +124,11 @@ const Dashboard = () => {
   .sort((a, b) => b.changePct - a.changePct)
   .slice(0, 5);
 
-  // Asset allocation donut chart data
   const allocationMap = {};
   portfolio.forEach(item => {
     const type = item.assetType || 'OTHER';
     allocationMap[type] = (allocationMap[type] || 0) + (item.totalValue || 0);
   });
-
-  const totalBalance = portfolio.reduce((sum, item) => sum + (item.totalValue || 0), 0);
 
   const maxStockRatio = Number(localStorage.getItem('maxStockRatio')) || 70;
   const currentStockRatio = totalBalance > 0 ? (allocationMap['STOCK'] || 0) / totalBalance * 100 : 0;
@@ -83,9 +148,9 @@ const Dashboard = () => {
     fillColor: (key === 'STOCK' && isStockBreached) ? '#ef4444' : undefined
   })).filter(item => item.value > 0);
 
-  // Portfolio trend data
   let pointsNeeded = 22;
   if (timeRange === '1W') pointsNeeded = 5;
+  if (timeRange === '1M') pointsNeeded = 22;
   if (timeRange === '1Y') pointsNeeded = 252;
   if (timeRange === '3Y') pointsNeeded = 756;
   if (timeRange === 'ALL') pointsNeeded = 99999;
@@ -157,18 +222,38 @@ const Dashboard = () => {
             {topPerformers.length === 0 ? (
               <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No assets yet</td></tr>
             ) : topPerformers.map(item => (
-              <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '16px 8px', fontWeight: 'bold', color: '#0f172a' }}>{item.ticker}</td>
-                <td style={{ padding: '16px 8px', color: '#334155' }}>${item.totalValue?.toFixed(2)}</td>
-                <td style={{ padding: '16px 8px', fontWeight: 'bold', color: item.changeAmt >= 0 ? '#10b981' : '#ef4444' }}>
-                  {item.changeAmt >= 0 ? '+' : ''}${item.changeAmt.toFixed(2)}
-                </td>
-                <td style={{ padding: '16px 8px' }}>
-                  <span style={{ backgroundColor: item.changePct >= 0 ? '#dcfce7' : '#fee2e2', color: item.changePct >= 0 ? '#166534' : '#991b1b', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
-                    {item.changePct >= 0 ? '↑' : '↓'} {Math.abs(item.changePct).toFixed(2)}%
-                  </span>
-                </td>
-              </tr>
+              <React.Fragment key={item.ticker}>
+                <tr 
+                  onClick={() => setExpandedRow(expandedRow === item.ticker ? null : item.ticker)}
+                  style={{ 
+                    borderBottom: '1px solid #f1f5f9',
+                    cursor: 'pointer',
+                    backgroundColor: expandedRow === item.ticker ? '#f8fafc' : 'transparent',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  <td style={{ padding: '16px 8px', fontWeight: 'bold', color: '#0f172a' }}>{item.ticker}</td>
+                  <td style={{ padding: '16px 8px', color: '#334155' }}>${item.totalValue?.toFixed(2)}</td>
+                  <td style={{ padding: '16px 8px', fontWeight: 'bold', color: item.changeAmt >= 0 ? '#10b981' : '#ef4444' }}>
+                    {item.changeAmt >= 0 ? '+' : ''}${item.changeAmt.toFixed(2)}
+                  </td>
+                  <td style={{ padding: '16px 8px' }}>
+                    <span style={{ backgroundColor: item.changePct >= 0 ? '#dcfce7' : '#fee2e2', color: item.changePct >= 0 ? '#166534' : '#991b1b', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' }}>
+                      {item.changePct >= 0 ? '↑' : '↓'} {Math.abs(item.changePct).toFixed(2)}%
+                    </span>
+                  </td>
+                </tr>
+                {expandedRow === item.ticker && (
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                    <td colSpan="4" style={{ padding: '0 20px 20px 20px' }}>
+                      <div style={{ marginTop: '10px', marginBottom: '10px', fontSize: '13px', fontWeight: 'bold', color: '#64748b' }}>
+                        90-Day Candlestick Chart
+                      </div>
+                      <KLineChart symbol={item.ticker} height={250} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -205,12 +290,28 @@ const Dashboard = () => {
             <Wallet size={18} color="#3b82f6"/> Portfolio Net Worth
           </h3>
 
-          <div style={{ marginBottom: '15px' }}>
-            <div style={{ fontSize: '32px', fontWeight: '900', color: '#0f172a' }}>
-              ${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+            <div>
+              <div style={{ fontSize: '32px', fontWeight: '900', color: '#0f172a', lineHeight: '1.2' }}>
+                ${currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', color: periodPnL >= 0 ? '#10b981' : '#ef4444', marginTop: '4px' }}>
+                {periodPnL >= 0 ? '+' : ''}${periodPnL.toFixed(2)} ({periodPnLPercent.toFixed(2)}%) <span style={{color: '#94a3b8', fontWeight: 'normal'}}> period return</span>
+              </div>
             </div>
-            <div style={{ fontSize: '14px', fontWeight: 'bold', color: periodPnL >= 0 ? '#10b981' : '#ef4444', marginTop: '4px' }}>
-              {periodPnL >= 0 ? '+' : ''}${periodPnL.toFixed(2)} ({periodPnLPercent.toFixed(2)}%) <span style={{color: '#94a3b8', fontWeight: 'normal'}}> period return</span>
+            
+            {/* 🎯 修复 3：常驻显示的 XIRR 徽章区，展示计算状态 */}
+            <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', padding: '8px 12px', borderRadius: '8px', textAlign: 'right', minWidth: '90px' }}>
+              <div style={{ fontSize: '11px', color: '#15803d', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>
+                Annualized XIRR
+              </div>
+              <div style={{ fontSize: '18px', color: '#166534', fontWeight: '900' }}>
+                {calculatedXirr === 'NO_DATA' ? 'N/A' :
+                 calculatedXirr === 'SAME_DAY' ? '< 1 Day' :
+                 calculatedXirr === null ? 'TBD' :
+                 calculatedXirr > 5 ? '>500%' :
+                 (calculatedXirr * 100).toFixed(2) + '%'}
+              </div>
             </div>
           </div>
 

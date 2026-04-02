@@ -20,10 +20,12 @@ const Navbar = () => {
 
   return (
     <nav style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0 40px', display: 'flex', alignItems: 'center', height: '70px', position: 'sticky', top: 0, zIndex: 1000, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginRight: '60px' }}>
+      
+      {/* 🎯 修改点：将 Logo 用 Link 包裹，点击直接跳回 '/' (Dashboard) */}
+      <Link to="/" style={{ display: 'flex', alignItems: 'center', marginRight: '60px', textDecoration: 'none' }}>
         <div style={{ width: '32px', height: '32px', backgroundColor: '#2563eb', borderRadius: '8px', marginRight: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' }}>P</div>
         <h1 style={{ fontSize: '22px', fontWeight: 'bold', color: '#1e293b', margin: 0, letterSpacing: '-0.5px' }}>PortfolioPro</h1>
-      </div>
+      </Link>
 
       <div style={{ display: 'flex', gap: '10px', height: '100%' }}>
         {navItems.map((item) => {
