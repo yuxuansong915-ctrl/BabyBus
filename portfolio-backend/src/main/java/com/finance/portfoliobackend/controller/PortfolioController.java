@@ -172,48 +172,54 @@ public class PortfolioController {
     }
 
     // ==========================================
-    // 升级版：缓存优先 (Cache-First) + 异步静默更新
+    // 终极版：缓存优先 + 15分钟保质期 + 异步更新防并发
     // ==========================================
     @GetMapping("/market/quotes")
     public List<AssetSearchResult> getBatchQuotes(@RequestParam String tickers) {
         List<String> tickerList = Arrays.asList(tickers.split(","));
 
-        // 1. 第一步：直接去 MySQL 数据库里查缓存
+        // 1. 去 MySQL 里查缓存
         List<MarketCache> cachedData = (List<MarketCache>) marketCacheRepo.findAllById(tickerList);
 
-        // 2. 如果数据库里完全没数据（比如项目刚部署第一次运行），只能阻塞等待同步获取
+        // 2. 如果完全没数据，阻塞等待（第一次运行）
         if (cachedData.isEmpty()) {
             System.out.println("⚠️ 数据库为空，首次阻塞拉取 EODHD 数据...");
             return fetchAndCacheMissingTickers(tickerList);
         }
 
-        // 3. 将数据库里的缓存数据转换为前端需要的 DTO 格式
         List<AssetSearchResult> results = new ArrayList<>();
+        boolean needsUpdate = false;
+        LocalDateTime expirationTime = LocalDateTime.now().minusMinutes(15); // 设置保质期为 15 分钟
+
+        // 3. 组装数据并检查是否过期
         for (MarketCache cache : cachedData) {
-            AssetSearchResult r = new AssetSearchResult();
-            r.setTicker(cache.getTicker());
-            r.setName(cache.getName());
-            r.setPrice(cache.getPrice());
-            r.setChange(cache.getChange());
-            r.setChangePercent(cache.getChangePercent());
-            r.setVolume(cache.getVolume());
-            r.setDayHigh(cache.getDayHigh());
-            r.setDayLow(cache.getDayLow());
+            AssetSearchResult r = convertToSearchResult(cache); // 使用你现成的转换方法
             results.add(r);
+
+            // 只要有一个资产的最后更新时间比 15 分钟前还早，就说明数据过期了
+            if (cache.getLastUpdated() == null || cache.getLastUpdated().isBefore(expirationTime)) {
+                needsUpdate = true;
+            }
         }
 
-        // 4. 【核心魔法】：开启一个后台独立线程，偷偷去 EODHD 拉取最新数据并写入数据库
-        // 这样前端不会卡顿等待，下次刷新就能看到最新数据了！
-        CompletableFuture.runAsync(() -> {
-            try {
-                System.out.println("🔄 [后台静默任务] 正在从 EODHD 同步最新行情...");
-                fetchAndCacheMissingTickers(tickerList);
-            } catch (Exception e) {
-                System.err.println("⚠️ 后台静默更新失败: " + e.getMessage());
-            }
-        });
+        // 如果缓存的条数比请求的少（比如有新加的股票），也需要去拉取
+        if (cachedData.size() < tickerList.size()) {
+            needsUpdate = true;
+        }
 
-        // 5. 立刻将刚才查到的缓存数据返回给前端，实现页面秒开！
+        // 4. 【核心魔法】：只有在数据真正过期时，才开启后台线程拉取！极大地保护了你的 API 额度！
+        if (needsUpdate) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    System.out.println("🔄 [后台静默任务] 数据已过期，正在从 EODHD 同步最新行情...");
+                    fetchAndCacheMissingTickers(tickerList);
+                } catch (Exception e) {
+                    System.err.println("⚠️ 后台静默更新失败: " + e.getMessage());
+                }
+            });
+        }
+
+        // 5. 立刻返回缓存数据，页面秒开！
         return results;
     }
 
