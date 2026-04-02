@@ -15,6 +15,12 @@ const AssetChart = ({ data }) => {
     );
   }
 
+/**
+ * 资产占比饼图组件
+ * 展示当前持仓中各个资产的价值占比（环形图样式）
+ * @param {Array} data - 资产列表数据，包含 ticker 和 totalValue
+ */
+
   // 计算总资产，用于在 Tooltip 中显示百分比
   const totalPortfolioValue = data.reduce((sum, item) => sum + (item.totalValue || 0), 0);
 
