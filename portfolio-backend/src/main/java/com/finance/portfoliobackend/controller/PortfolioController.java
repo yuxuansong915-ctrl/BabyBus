@@ -69,33 +69,101 @@ public class PortfolioController {
         return resultList;
     }
 
+    // ==========================================
+    // 1. 处理买入请求
+    // ==========================================
     @PostMapping("/add")
-    public PortfolioItem addRecord(@RequestBody AddRecordRequest request) {
-        // 使用无参构造器，严格匹配 Double 类型
-        PortfolioItem item = repository.findByTicker(request.getTicker())
-                .orElseGet(() -> {
-                    PortfolioItem newItem = new PortfolioItem();
-                    newItem.setTicker(request.getTicker());
-                    newItem.setAssetType(request.getAssetType());
-                    newItem.setShares(0); // 严格使用 0.0 (Double)
-                    return newItem;
-                });
+    public ResponseEntity<?> addRecord(@RequestBody AddRecordRequest request) {
+        return processTrade(request, "ADD");
+    }
 
-        // 获取原有的 shares (Double) 并加上新增的 shares (Double)
-        item.setShares(item.getShares() + request.getShares());
-        PortfolioItem savedItem = repository.save(item);
+    // ==========================================
+    // 2. 处理卖出请求 (核心修复：前端之前调了这个接口但后端没有)
+    // ==========================================
+    @PostMapping("/sell")
+    public ResponseEntity<?> sellRecord(@RequestBody AddRecordRequest request) {
+        return processTrade(request, "SELL");
+    }
 
-        TransactionRecord record = new TransactionRecord();
-        record.setTicker(request.getTicker());
-        record.setActionType("ADD");
-        record.setShares(request.getShares()); // 类型为 Double
-        record.setPrice(request.getPrice());   // 类型为 Double
-        record.setCurrency(request.getCurrency());
-        record.setEmotion(request.getEmotion());
-        record.setTimestamp(LocalDateTime.now());
-        transactionRepo.save(record);
+    // ==========================================
+    // 3. 统一交易处理引擎 (智能补全价格 + 算账 + 风控拦截)
+    // ==========================================
+    private ResponseEntity<?> processTrade(AddRecordRequest request, String action) {
+        try {
+            boolean isSell = action.equals("SELL");
+            Double execPrice = request.getPrice();
 
-        return savedItem;
+            // 智能兜底：如果前端没传价格，自动去获取真实市场现价
+            if (execPrice == null || execPrice <= 0) {
+                YahooFinanceClient.AssetQuote quote = yahooClient.getQuote(request.getTicker());
+                if (quote != null && quote.getRegularMarketPrice() > 0) {
+                    execPrice = quote.getRegularMarketPrice();
+                } else {
+                    execPrice = 0.0;
+                }
+            }
+
+            Integer execShares = request.getShares();
+            Double totalCost = request.getTotalCost();
+
+            // 智能算账：如果只填了总投入没填股数，或者填了股数没填总投入，系统自动反推
+            if (execShares == null && totalCost != null && execPrice > 0) {
+                execShares = (int) (totalCost / execPrice);
+            } else if (totalCost == null && execShares != null && execPrice > 0) {
+                totalCost = execShares * execPrice;
+            }
+            if (execShares == null) execShares = 0;
+            if (totalCost == null) totalCost = 0.0;
+
+            // 获取当前持仓
+            PortfolioItem item = repository.findByTicker(request.getTicker()).orElse(null);
+
+            if (isSell) {
+                // 【卖出风控】
+                if (item == null) {
+                    return ResponseEntity.badRequest().body("未找到该资产的持仓，无法卖出！");
+                }
+                if (item.getShares() < execShares) {
+                    return ResponseEntity.badRequest().body("持仓不足，无法卖出！当前仅持有: " + item.getShares() + " 股");
+                }
+
+                item.setShares(item.getShares() - execShares); // 减去股数
+                if (item.getShares() == 0) {
+                    repository.delete(item); // 卖光了直接清仓
+                    item = null;
+                } else {
+                    repository.save(item);
+                }
+            } else {
+                // 【买入逻辑】
+                if (item == null) {
+                    item = new PortfolioItem();
+                    item.setTicker(request.getTicker());
+                    item.setAssetType(request.getAssetType());
+                    item.setShares(0);
+                }
+                item.setShares(item.getShares() + execShares); // 加上股数
+                repository.save(item);
+            }
+
+            // 保存完美无缺的交易流水
+            TransactionRecord record = new TransactionRecord();
+            record.setTicker(request.getTicker());
+            record.setActionType(action);
+            record.setShares(execShares);
+            record.setPrice(execPrice);
+            record.setTotalCost(totalCost); // 存入新增的总金额字段
+            record.setCurrency(request.getCurrency() != null ? request.getCurrency() : "USD");
+            record.setEmotion(request.getEmotion());
+            record.setTimestamp(LocalDateTime.now());
+            transactionRepo.save(record);
+
+            return ResponseEntity.ok(record);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body("服务器处理交易失败: " + e.getMessage());
+        }
     }
 
     @GetMapping("/ledger")
