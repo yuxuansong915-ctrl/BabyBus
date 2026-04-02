@@ -1,3 +1,8 @@
+/*
+  持仓明细表格组件 PortfolioTable
+  展示用户持有的股票资产列表，包含股票代码、持仓数量、最新价格、迷你走势图、总价值，
+  并提供卖出清仓功能，操作成功后自动刷新数据
+*/
 import React from 'react';
 import { LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 
