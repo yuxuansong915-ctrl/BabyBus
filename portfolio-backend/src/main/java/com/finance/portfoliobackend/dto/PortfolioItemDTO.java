@@ -12,6 +12,8 @@ public class PortfolioItemDTO {
     private Integer shares;
     private Double currentPrice;
     private Double totalValue;
+    private Double change;
+    private Double changePercent;
     private List<Double> priceTrend;
 
     // --- 📈 股票专属基本面数据 ---

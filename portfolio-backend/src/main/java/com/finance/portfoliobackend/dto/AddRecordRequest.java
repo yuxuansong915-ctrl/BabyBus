@@ -15,4 +15,6 @@ public class AddRecordRequest {
 
     private String currency;     // 结算货币 (如 USD, CNY)
     private String emotion;      // 决策情绪 (如 FOMO, 价值投资等)
+
+    private String actionType;
 }
