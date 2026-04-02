@@ -5,11 +5,11 @@ import { ShieldCheck, ShieldAlert, Save, Lock } from 'lucide-react';
 // 资产类型 UI 配置字典 (方便未来无限扩展)
 // ==========================================
 const ASSET_TYPE_CONFIG = {
-  STOCK: { label: '股票', color: '#8b5cf6', defaultLimit: 70 },
-  ETF: { label: '基金/ETF', color: '#10b981', defaultLimit: 50 },
-  CRYPTO: { label: '加密货币', color: '#f59e0b', defaultLimit: 20 },
-  FOREX: { label: '外汇', color: '#3b82f6', defaultLimit: 30 },
-  COMMODITIES: { label: '贵金属/大宗', color: '#ef4444', defaultLimit: 30 },
+  STOCK: { label: 'Stocks', color: '#8b5cf6', defaultLimit: 70 },
+  ETF: { label: 'Funds / ETFs', color: '#10b981', defaultLimit: 50 },
+  CRYPTO: { label: 'Crypto', color: '#f59e0b', defaultLimit: 20 },
+  FOREX: { label: 'Forex', color: '#3b82f6', defaultLimit: 30 },
+  COMMODITIES: { label: 'Commodities', color: '#ef4444', defaultLimit: 30 },
 };
 
 const Settings = () => {
@@ -61,7 +61,7 @@ const Settings = () => {
     }
 
     const label = ASSET_TYPE_CONFIG[type]?.label || type;
-    return `${label}占比: ${currentRatio}% (红线: ${limit}%)`;
+    return `${label}: ${currentRatio}% (limit: ${limit}%)`;
   });
 
   const handleSave = () => {
@@ -78,16 +78,16 @@ const Settings = () => {
     
     setTimeout(() => {
       setIsSaving(false);
-      alert('✅ 风控规则已全网同步并生效！去 Dashboard 看看图表的变化吧！');
+      alert('Risk rules saved and applied globally! Check the Dashboard.');
     }, 600);
   };
 
-  if (isLoading) return <div style={{ textAlign:'center', marginTop:'50px', color: '#64748b' }}>正在扫描全域资产风险...</div>;
+  if (isLoading) return <div style={{ textAlign:'center', marginTop:'50px', color: '#64748b' }}>Scanning portfolio risk...</div>;
 
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '40px' }}>
       <div style={{ marginBottom: '30px' }}>
-        <h2 style={{ margin: 0, color: '#0f172a', fontSize: '28px', display: 'flex', alignItems: 'center', gap: '10px' }}><Lock size={32} color="#3b82f6" /> 风险控制与行为干预</h2>
+        <h2 style={{ margin: 0, color: '#0f172a', fontSize: '28px', display: 'flex', alignItems: 'center', gap: '10px' }}><Lock size={32} color="#3b82f6" /> Risk Control & Behavioral Interventions</h2>
       </div>
 
       {/* 动态警报面板 */}
@@ -97,10 +97,10 @@ const Settings = () => {
         </div>
         <div>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', color: isRiskBreached ? '#991b1b' : '#065f46' }}>
-            {activeTypes.length === 0 ? 'ℹ️ 当前无持仓资产' : (isRiskBreached ? '⚠️ 警告：部分资产仓位超标！' : '✅ 账户风控状态良好')}
+            {activeTypes.length === 0 ? 'No holdings detected' : (isRiskBreached ? 'Warning: Some positions exceed limits!' : 'Portfolio risk status is healthy')}
           </h3>
           <p style={{ margin: 0, color: isRiskBreached ? '#b91c1c' : '#047857', fontSize: '15px' }}>
-            {activeTypes.length > 0 ? statusTexts.join(' | ') : '在 Holdings 页面添加资产后，风控引擎将自动启动。'}
+            {activeTypes.length > 0 ? statusTexts.join(' | ') : 'Add assets on the Holdings page to activate the risk engine.'}
           </p>
         </div>
       </div>
@@ -108,10 +108,10 @@ const Settings = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
         {/* 动态仓位红线设置面板 */}
         <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' }}>动态仓位红线</h3>
+          <h3 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' }}>Position Limits</h3>
           
           {activeTypes.length === 0 ? (
-            <div style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>未检测到持仓资产，无需设置。</div>
+            <div style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '20px 0' }}>No holdings detected. No settings to configure.</div>
           ) : (
             activeTypes.map(type => {
               const config = ASSET_TYPE_CONFIG[type] || { label: type, color: '#94a3b8', defaultLimit: 100 };
@@ -120,7 +120,7 @@ const Settings = () => {
               return (
                 <div key={type} style={{ marginBottom: '25px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 'bold', color: '#334155' }}>{config.label}最高占比</span>
+                    <span style={{ fontWeight: 'bold', color: '#334155' }}>{config.label} Max Allocation</span>
                     <span style={{ color: config.color, fontWeight: 'bold' }}>{currentLimit}%</span>
                   </div>
                   <input 
@@ -138,14 +138,14 @@ const Settings = () => {
 
         {/* 行为金融学干预保持不变 */}
         <div style={{ backgroundColor: 'white', borderRadius: '16px', padding: '25px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-          <h3 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' }}>行为金融学干预</h3>
+          <h3 style={{ margin: '0 0 20px 0', color: '#0f172a', fontSize: '18px', borderBottom: '2px solid #f1f5f9', paddingBottom: '15px' }}>Behavioral Interventions</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-              <div><div style={{ fontWeight: 'bold', marginBottom: '4px' }}>FOMO 交易拦截预警</div><div style={{ fontSize: '12px', color: '#64748b' }}>追涨时强行弹窗要求二次确认。</div></div>
+              <div><div style={{ fontWeight: 'bold', marginBottom: '4px' }}>FOMO Trade Warning</div><div style={{ fontSize: '12px', color: '#64748b' }}>Require confirmation when buying on FOMO.</div></div>
               <input type="checkbox" checked={enableFomoAlert} onChange={() => setEnableFomoAlert(!enableFomoAlert)} style={{ width: '18px', height: '18px', accentColor: '#0f172a' }}/>
             </label>
             <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-              <div><div style={{ fontWeight: 'bold', marginBottom: '4px' }}>止损冷静期锁定</div><div style={{ fontSize: '12px', color: '#64748b' }}>短时间内连续割肉时触发系统锁定。</div></div>
+              <div><div style={{ fontWeight: 'bold', marginBottom: '4px' }}>Loss Cooldown Lock</div><div style={{ fontSize: '12px', color: '#64748b' }}>Lock the system after consecutive stop-losses.</div></div>
               <input type="checkbox" checked={enableLossCooldown} onChange={() => setEnableLossCooldown(!enableLossCooldown)} style={{ width: '18px', height: '18px', accentColor: '#0f172a' }}/>
             </label>
           </div>
@@ -154,7 +154,7 @@ const Settings = () => {
 
       <div style={{ marginTop: '30px', display: 'flex', justifyContent: 'flex-end' }}>
         <button onClick={handleSave} disabled={isSaving} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#0f172a', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', opacity: isSaving ? 0.7 : 1 }}>
-          <Save size={20} /> {isSaving ? '正在同步全网节点...' : '保存风控规则'}
+          <Save size={20} /> {isSaving ? 'Syncing to all nodes...' : 'Save Risk Rules'}
         </button>
       </div>
     </div>

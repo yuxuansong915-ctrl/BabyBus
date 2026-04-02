@@ -4,32 +4,60 @@ import { History, ArrowDownRight, ArrowUpRight, BrainCircuit, Filter } from 'luc
 const Transactions = () => {
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedEmotion, setSelectedEmotion] = useState('All');
 
-  // 组件挂载时，去后端拉取所有的流水账
+  // 1. 强力翻译器：将数据库中遗留的中文情绪，强制映射为纯英文
+  const translateToEnglish = (emo) => {
+    if (!emo) return 'Other';
+    if (emo.includes('止盈') || emo.includes('计划内')) return 'Rational / Take Profit';
+    if (emo.includes('止损') || emo.includes('逻辑破坏')) return 'Stop Loss / Thesis Broken';
+    if (emo.includes('FOMO') || emo.includes('追涨')) return 'FOMO / Chasing';
+    if (emo.includes('恐慌补仓') || emo.includes('摊低成本')) return 'Panic Buy / Averaging Down';
+    if (emo.includes('恐慌抛售') || emo.includes('规避风险')) return 'Panic Sell / Risk Off';
+    if (emo.includes('冲动交易') || emo.includes('纯凭直觉')) return 'Impulsive / Pure Instinct';
+    if (emo.includes('冲动抛售') || emo.includes('缺乏耐心')) return 'Impulsive Sell / Impatient';
+    if (emo.includes('清仓退出')) return 'Exit / Portfolio Clean-up';
+    if (emo.includes('新闻或社交媒体驱动')) return 'News / Social Media Driven';
+    return emo;
+  };
+
   useEffect(() => {
-    fetch('http://localhost:8080/api/portfolio/ledger')
+    fetch('http://127.0.0.1:8080/api/portfolio/ledger')
       .then(res => res.json())
       .then(data => {
-        // 按时间倒序排列（最新的交易在最上面）
-        const sortedData = data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setTransactions(sortedData);
+        // 在排序的同时，用翻译器把所有的中文洗成英文
+        const processedData = data.map(tx => ({
+          ...tx,
+          emotion: translateToEnglish(tx.emotion) 
+        })).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        setTransactions(processedData);
         setIsLoading(false);
       })
       .catch(err => {
-        console.error("获取流水账失败:", err);
+        console.error("Fetch failed:", err);
         setIsLoading(false);
       });
   }, []);
 
-  // --- 辅助函数：根据不同的情绪标签，返回不同的颜色配置 ---
+  // 2. 动态提取所有出现过的英文情绪（用于生成下拉菜单）
+  const uniqueEmotions = ['All', ...new Set(transactions.map(tx => tx.emotion).filter(Boolean))];
+
+  // 3. 过滤器核心逻辑
+  const filteredTransactions = selectedEmotion === 'All' 
+    ? transactions 
+    : transactions.filter(tx => tx.emotion === selectedEmotion);
+
+  // 纯英文的情绪颜色配置器
   const getEmotionStyle = (emotion) => {
     if (!emotion) return { bg: '#f1f5f9', text: '#64748b' };
-    if (emotion.includes('计划内')) return { bg: '#dcfce7', text: '#166534' }; // 绿色
-    if (emotion.includes('FOMO') || emotion.includes('追涨')) return { bg: '#fee2e2', text: '#991b1b' }; // 红色
-    if (emotion.includes('恐慌')) return { bg: '#fef3c7', text: '#92400e' }; // 黄色
-    if (emotion.includes('冲动')) return { bg: '#ffedd5', text: '#9a3412' }; // 橙色
-    if (emotion.includes('对冲')) return { bg: '#e0f2fe', text: '#075985' }; // 蓝色
-    return { bg: '#f3e8ff', text: '#6b21a8' }; // 紫色 (媒体驱动等)
+    const em = emotion.toLowerCase();
+    
+    if (em.includes('rational') || em.includes('profit')) return { bg: '#dcfce7', text: '#166534' }; // 绿
+    if (em.includes('fomo') || em.includes('stop loss')) return { bg: '#fee2e2', text: '#991b1b' }; // 红
+    if (em.includes('panic') || em.includes('averaging')) return { bg: '#fef3c7', text: '#92400e' }; // 黄
+    if (em.includes('impulsive')) return { bg: '#ffedd5', text: '#9a3412' }; // 橙
+    return { bg: '#f3e8ff', text: '#6b21a8' }; // 紫
   };
 
   return (
@@ -39,83 +67,77 @@ const Transactions = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', borderBottom: '2px solid #f1f5f9', paddingBottom: '20px' }}>
         <div>
           <h2 style={{ margin: 0, color: '#0f172a', fontSize: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <History size={28} color="#3b82f6" /> 行为金融学审计台 (Trading Journal)
+            <History size={28} color="#3b82f6" /> Trading Journal
           </h2>
           <p style={{ margin: '8px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-            复盘您的每一笔交易，觉察情绪对投资决策的影响。
+            Review your trades and analyze the impact of behavioral finance.
           </p>
         </div>
         
-        {/* 预留的筛选按钮 */}
-        <button style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '8px 16px', borderRadius: '8px', color: '#475569', fontWeight: 'bold', cursor: 'pointer' }}>
-          <Filter size={16} /> 筛选情绪
-        </button>
+        {/* 动态情绪下拉过滤器 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '6px 12px', borderRadius: '8px' }}>
+          <Filter size={16} color="#475569" />
+          <select 
+            value={selectedEmotion} 
+            onChange={(e) => setSelectedEmotion(e.target.value)}
+            style={{ border: 'none', backgroundColor: 'transparent', color: '#0f172a', fontWeight: 'bold', outline: 'none', cursor: 'pointer', fontSize: '14px' }}
+          >
+            {uniqueEmotions.map((emo, index) => (
+              <option key={index} value={emo}>{emo === 'All' ? 'All Emotions' : emo}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {/* 核心表格区域 */}
+      {/* 表格区域 */}
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead style={{ backgroundColor: '#f8fafc' }}>
             <tr>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>交易时间</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>动作</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>资产代码</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>成交价格</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>数量</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>总金额</th>
-              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>决策情绪 (Behavioral Tag)</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Date</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Action</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Ticker</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Price</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Shares/Qty</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Total Value</th>
+              <th style={{ padding: '16px', color: '#475569', fontSize: '14px', borderBottom: '2px solid #e2e8f0' }}>Behavioral Tag</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>正在调取档案...</td></tr>
-            ) : transactions.length === 0 ? (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>暂无交易记录，请先在 Holdings 页面添加。</td></tr>
+              <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Loading ledger...</td></tr>
+            ) : filteredTransactions.length === 0 ? (
+              <tr><td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>No records found.</td></tr>
             ) : (
-              transactions.map((tx) => {
+              filteredTransactions.map((tx) => {
                 const isAdd = tx.actionType === 'ADD';
                 const emotionStyle = getEmotionStyle(tx.emotion);
                 
                 return (
                   <tr key={tx.id} style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s' }}>
-                    
-                    {/* 时间 */}
                     <td style={{ padding: '16px', color: '#64748b', fontSize: '14px' }}>
-                      {new Date(tx.timestamp).toLocaleString([], { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(tx.timestamp).toLocaleString('en-US', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </td>
-                    
-                    {/* 动作 (买入/卖出 图标) */}
                     <td style={{ padding: '16px' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '6px', backgroundColor: isAdd ? '#ecfdf5' : '#fef2f2', color: isAdd ? '#10b981' : '#ef4444', fontWeight: 'bold', fontSize: '12px' }}>
                         {isAdd ? <ArrowDownRight size={14}/> : <ArrowUpRight size={14}/>}
-                        {isAdd ? '买入' : '卖出'}
+                        {isAdd ? 'BUY' : 'SELL'}
                       </div>
                     </td>
-                    
-                    {/* 代码 */}
                     <td style={{ padding: '16px', fontWeight: 'bold', color: '#0f172a' }}>{tx.ticker}</td>
-                    
-                    {/* 价格与货币 */}
                     <td style={{ padding: '16px', color: '#334155' }}>
-                      {tx.price ? `${tx.price.toFixed(2)} ${tx.currency}` : 'N/A'}
+                      {tx.price ? `${tx.price.toLocaleString('en-US', {maximumFractionDigits: 6})} ${tx.currency}` : 'N/A'}
                     </td>
-                    
-                    {/* 数量 */}
-                    <td style={{ padding: '16px', color: '#334155' }}>{tx.shares} 股</td>
-                    
-                    {/* 总金额计算 */}
+                    <td style={{ padding: '16px', color: '#334155' }}>{tx.shares}</td>
                     <td style={{ padding: '16px', fontWeight: 'bold', color: '#0f172a' }}>
-                      {tx.price && tx.shares ? `${(tx.price * tx.shares).toFixed(2)} ${tx.currency}` : 'N/A'}
+                      {tx.price && tx.shares ? `${(tx.price * tx.shares).toLocaleString('en-US', {maximumFractionDigits: 2})} ${tx.currency}` : 'N/A'}
                     </td>
-                    
-                    {/* 🎯 核心亮点：情绪标签 */}
                     <td style={{ padding: '16px' }}>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '20px', backgroundColor: emotionStyle.bg, color: emotionStyle.text, fontSize: '13px', fontWeight: 'bold' }}>
                         <BrainCircuit size={14} />
                         {tx.emotion}
                       </div>
                     </td>
-                    
                   </tr>
                 );
               })
