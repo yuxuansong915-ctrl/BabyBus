@@ -1,3 +1,15 @@
+/*
+  【组件概括流程】AddRecordModal 交易记录弹窗
+  1. 用途：支持 买入 / 卖出 两种交易模式，统一记录资产交易信息
+  2. 接收参数：是否打开、关闭回调、成功回调、预设数据、交易模式(ADD/SELL)
+  3. 功能：
+     - 自动根据买入/卖出切换标题、颜色、接口、提示语
+     - 支持填写：资产代码、类型、时间、价格、股数/总金额
+     - 二选一输入：股数 ↔ 总投入资金（自动互斥）
+     - 决策情绪选择 + FOMO 追涨拦截提醒（买入时）
+     - 提交数据 → 调用对应接口 → 成功后刷新列表并关闭弹窗
+  4. 特点：UI美观、交互友好、带行为干预、防重复提交
+*/
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, DollarSign, Activity, BrainCircuit } from 'lucide-react';
 
